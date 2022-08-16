@@ -49,23 +49,27 @@ const SCHEME_SUFFIX         = COLON . SLASH . SLASH;
 
 // --------------------------------------------------------------------------------------------------------------------
 
+// define E_EXCEPTION
+const E_EXCEPTION = 65536;
+
 const PHP_ERROR_CODES       = array(
-  E_ERROR                   => 'Fatal Error',
-  E_WARNING                 => 'Warning',
-  E_PARSE                   => 'Parse',
-  E_NOTICE                  => 'Notice',
-  E_CORE_ERROR              => 'Fatal Error',
-  E_CORE_WARNING            => 'Warning',
-  E_COMPILE_ERROR           => 'Fatal Error',
-  E_COMPILE_WARNING         => 'Warning',
-  E_USER_ERROR              => 'Fatal Error',
-  E_USER_WARNING            => 'Warning',
-  E_USER_NOTICE             => 'Notice',
-  E_STRICT                  => 'Strict',
-  E_RECOVERABLE_ERROR       => 'Fatal Error',
-  E_DEPRECATED              => 'Deprecated',
-  E_USER_DEPRECATED         => 'Deprecated',
-  E_ALL                     => 'Unknown Error',
+  E_ERROR                   => 'System Error',
+  E_WARNING                 => 'System Warning',
+  E_PARSE                   => 'PHP Parser',
+  E_NOTICE                  => 'System Notice',
+  E_CORE_ERROR              => 'Core Error',
+  E_CORE_WARNING            => 'Core Warning',
+  E_COMPILE_ERROR           => 'Compiler Error',
+  E_COMPILE_WARNING         => 'Compiler Warning',
+  E_USER_ERROR              => 'Application Error',
+  E_USER_WARNING            => 'Application Warning',
+  E_USER_NOTICE             => 'Application Notice',
+  E_STRICT                  => 'PHP Strict Mode',
+  E_RECOVERABLE_ERROR       => 'System Error',
+  E_DEPRECATED              => 'System Deprecation',
+  E_USER_DEPRECATED         => 'Application Deprecation',
+  E_ALL                     => 'Unable to Comply',
+  E_EXCEPTION               => 'Exception',
 );
 
 // --------------------------------------------------------------------------------------------------------------------
@@ -149,6 +153,7 @@ const APRMD5_ALPHABET       = './0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijk
 
 // XXX: Remove these!
 const PHP_EXTENSION         = FILE_EXTS['php'];
+const JSON_EXTENSION        = FILE_EXTS['json'];
 const PALEMOON_GUID         = '{8de7fcbb-c55c-4fbe-bfc5-fc555c87dbc4}';
 const REGEX_GET_FILTER      = REGEX_PATTERNS['query'];
 const JSON_ENCODE_FLAGS     = JSON_FLAGS['display'];
@@ -169,6 +174,10 @@ function gfOutput($aContent, $aHeader = null) {
                $aContent['metadata']['content'] ??
                $aContent['content'] ??
                EMPTY_STRING;
+
+    if ($title == 'Output' && $content == EMPTY_STRING) {
+      $content = $aContent ?? $content;
+    }
   }
   else {
     $title = 'Output';
@@ -201,95 +210,62 @@ function gfOutput($aContent, $aHeader = null) {
   exit();
 }
 
-/**********************************************************************************************************************
-* Error function that will display data (Error Message)
-*
-* This version of the function can emit the error as xml or text depending on the environment.
-* It also can use gfContent() if defined and has the same signature.
-* It also has its legacy ability for generic output if the error message is not a string as formatted json
-* regardless of the environment.
-*
-* @dep gfContent() - conditional
-* @dep NEW_LINE
-* @dep XML_TAG
-* @dep JSON_FLAGS['display']
-**********************************************************************************************************************/
-function gfError($aValue, $aPHPError = false, $aContentGenerator = null) { 
-  $pageHeader = ['default' => 'Unable to Comply', 'php' => 'PHP Error', 'output' => 'Output'];
-  $isContentGenerator = ($aContentGenerator === null && !SAPI_IS_CLI) ? function_exists('gfContent') : $aContentGenerator;
-  $isOutput = false;
+// --------------------------------------------------------------------------------------------------------------------
 
-  if (is_string($aValue) || is_int($aValue)) {
-    $eContentType = 'xml';
-    $ePrefix = $aPHPError ? $pageHeader['php'] : $pageHeader['default'];
+function gfReportFailure(array $aMetadata) {
+  $traceline = fn($eFile, $eLine) => str_replace(ROOT_PATH, EMPTY_STRING, $eFile) . COLON . $eLine;
+  $generator = (!SAPI_IS_CLI && function_exists('gfContent')) ? true : false;
+  $functions = ['gfErrorHandler', 'gfExceptionHandler', 'trigger_error'];
+  $trace = [$traceline($aMetadata['file'], $aMetadata['line'])];
 
-    if ($isContentGenerator || SAPI_IS_CLI) {
-      $eMessage = $aValue;
-    }
-    else {
-      $eMessage = XML_TAG . NEW_LINE . '<error title="' . $ePrefix . '">' . $aValue . '</error>';
-    }
-  }
-  else {
-    $isOutput = true;
-    $eContentType = 'json';
-    $ePrefix = $pageHeader['output'];
-    $eMessage = json_encode($aValue, JSON_FLAGS['display']);
-  }
-
-  if ($isContentGenerator && !SAPI_IS_CLI) {
-    if ($aPHPError) {
-      gfContent($ePrefix, $eMessage, null, true, true);
+  foreach ($aMetadata['trace'] as $_key => $_value) {
+    if (in_array($_value['function'], $functions)) {
+      continue;
     }
 
-    if ($isOutput) {
-      gfContent($ePrefix, $eMessage, true, false, true);
-    }
-    
-    gfContent($ePrefix, $eMessage, null, null, true);
+    $trace[] = $traceline($_value['file'], $_value['line']);
   }
-  elseif (SAPI_IS_CLI) {
-    gfOutput(['title' => $ePrefix, 'content' => $eMessage]);
+
+  $title = PHP_ERROR_CODES[$aMetadata['code']] ?? PHP_ERROR_CODES[E_ALL];
+  $content = [$aMetadata['message'], $trace];
+
+  if ($generator) {
+    gfContent(['title' => $title, 'content' => $content]);
   }
-  else {
-    gfOutput($eMessage, $eContentType);
-  }
+
+  gfOutput(['title'=> $title, 'content' => $content]);
 }
 
-/**********************************************************************************************************************
-* PHP Error Handler
-*
-* @dep SPACE
-* @dep PHP_ERROR_CODES
-* @dep gfError()
-**********************************************************************************************************************/
-function gfErrorHandler($eCode, $eString, $eFile, $eLine, $eTrace = EMPTY_ARRAY) {
-  $eType = PHP_ERROR_CODES[$eCode] ?? E_ALL;
-  $eMessage = $eType . ': ' . $eString . SPACE . 'in' . SPACE .
-                  str_replace(ROOT_PATH, '', $eFile) . SPACE . 'on line' . SPACE . $eLine;
+// --------------------------------------------------------------------------------------------------------------------
 
+function gfErrorHandler($eCode, $eMessage, $eFile, $eLine) {
   if (!(error_reporting() & $eCode)) {
     // Don't do jack shit because the developers of PHP think users shouldn't be trusted.
     return;
   }
 
-  gfError($eMessage, true);
+  gfReportFailure(['code' => $eCode, 'message' => $eMessage, 'file' => $eFile,
+                   'line' => $eLine, 'trace' => debug_backtrace()]);
 }
 
-/**********************************************************************************************************************
-* PHP Exception Handler
-*
-* @dep SPACE
-* @dep PHP_ERROR_CODES
-* @dep gfError()
-**********************************************************************************************************************/
-function gfExceptionHandler($e) {
-  gfErrorHandler(E_USER_ERROR, $e->getMessage(), $e->getFile(), $e->getLine(), $e->getTrace());
-}
-
-// Set the handlers
 set_error_handler("gfErrorHandler");
+
+// --------------------------------------------------------------------------------------------------------------------
+
+function gfExceptionHandler($ex) {
+  gfReportFailure(['code' => E_EXCEPTION, 'message' => $ex->getMessage(), 'file' => $ex->getFile(),
+                   'line' => $ex->getLine(), 'trace' => $ex->getTrace()]);
+}
+
 set_exception_handler("gfExceptionHandler");
+
+// --------------------------------------------------------------------------------------------------------------------
+
+function gfError($aMessage) {
+  $trace = debug_backtrace();
+  gfReportFailure(['code' => E_ALL, 'message' => $aMessage, 'file' => $trace[0]['file'],
+                   'line' => $trace[0]['line'], 'trace' => array_slice($trace, 1)]);
+}
 
 // ====================================================================================================================
 
@@ -926,8 +902,9 @@ function gfCreateXML($aData, $aDirectOutput = null) {
 
     // Properly handle content using XML and not try and be lazy.. It almost never works!
     if (array_key_exists('@content', $aData) && is_string($aData['@content'])) {
-      if (str_contains($aData['@content'], "<") || str_contains($aData['@content'], ">") || str_contains($aData['@content'], "?") ||
-          str_contains($aData['@content'], "&") || str_contains($aData['@content'], "'") || str_contains($aData['@content'], '"')) {
+      if (str_contains($aData['@content'], "<") || str_contains($aData['@content'], ">") ||
+          str_contains($aData['@content'], "?") || str_contains($aData['@content'], "&") ||
+          str_contains($aData['@content'], "'") || str_contains($aData['@content'], '"')) {
         $content = $dom->createCDATASection($aData['@content'] ?? EMPTY_STRING);
       }
       else {

@@ -21,10 +21,13 @@ const SKIN_RELPATH        = '/skin/';
 // Define components
 const COMPONENTS = array(
   'file'            => ROOT_PATH . COMPONENTS_RELPATH . 'file.php',
+  'panel'           => ROOT_PATH . COMPONENTS_RELPATH . 'panel/panel.php',
   'phoebus'         => ROOT_PATH . COMPONENTS_RELPATH . 'phoebus.php',
-  'site'            => ROOT_PATH . COMPONENTS_RELPATH . 'site/site.php',
+//'site'            => ROOT_PATH . COMPONENTS_RELPATH . 'site/site.php',
   'update'          => ROOT_PATH . COMPONENTS_RELPATH . 'update.php',
 );
+
+const PRETTY_PATH_COMPONENTS = ['panel'];
 
 // Define databases
 const DATABASES = array(
@@ -47,8 +50,6 @@ const LIBRARIES = array(
   'safeMySQL'       => ROOT_PATH . LIB_RELPATH . 'safemysql.class.php',
   'smarty'          => ROOT_PATH . LIB_RELPATH . 'smarty/Smarty.class.php',
 );
-
-const PRETTY_PATH_COMPONENTS = ['panel'];
 
 // ====================================================================================================================
 
@@ -256,34 +257,7 @@ if ($gaRuntime['offlineMode']) {
     $gvOfflineMessage = 'This in-development version of'. SPACE . SOFTWARE_NAME . SPACE . 'is not for public consumption.';
   }
 
-  switch ($gaRuntime['qComponent']) {
-    case 'aus':
-      gfOutput(XML_TAG . '<RDF:RDF xmlns:RDF="http://www.w3.org/1999/02/22-rdf-syntax-ns#"' .
-                              'xmlns:em="http://www.mozilla.org/2004/em-rdf#" />', 'xml');
-      break;
-    case 'integration':
-      $gaRuntime['qAPIScope'] = gfSuperVar('get', 'type');
-      $gaRuntime['qAPIFunction'] = gfSuperVar('get', 'request');
-      if ($gaRuntime['qAPIScope'] != 'internal') {
-        gfHeader(404);
-      }
-      switch ($gaRuntime['qAPIFunction']) {
-        case 'search':
-          gfOutput(XML_TAG . '<searchresults total_results="0" />', 'xml');
-          break;
-        case 'get':
-        case 'recommended':
-          gfOutput(XML_TAG . '<addons />', 'xml');
-          break;
-        default:
-          gfHeader(404);
-      }
-      break;
-    case 'discover':
-      gfHeader(404);
-    default:
-      gfError($gvOfflineMessage);
-  }
+  gfError($gvOfflineMessage);
 }
 
 // ------------------------------------------------------------------------------------------------------------------
@@ -297,16 +271,18 @@ if (in_array($gaRuntime['qComponent'], ['aus', 'discover', 'download', 'integrat
 
 // ------------------------------------------------------------------------------------------------------------------
 
-// Load component based on qComponent
-if ($gaRuntime['currentPath'][0] == 'special' || $gaRuntime['qComponent'] == 'special') {
+// Handle the Special "component"
+if (in_array('special', [$gaRuntime['currentPath'][0], $gaRuntime['qComponent']])) {
   $gaRuntime['qComponent'] = 'special';
   
   // The Special Component never has more than one level below it
   // We still have to determine the root of the component though...
   if (count($gaRuntime['currentPath']) == 1) {
+    // URL /special/
     $gvSpecialFunction = 'root';
   }
   else {
+    // URL /special/xxx/
     gfCheckPathCount(2);
     $gvSpecialFunction = $gaRuntime['currentPath'][1];
   }
@@ -370,25 +346,27 @@ if ($gaRuntime['currentPath'][0] == 'special' || $gaRuntime['qComponent'] == 'sp
 
   // We're done here
   exit();
-
 }
-elseif ($gaRuntime['qComponent'] && array_key_exists($gaRuntime['qComponent'], COMPONENTS)) {
+
+// ------------------------------------------------------------------------------------------------------------------
+
+// Handle pretty urls that override the site component
+if (in_array($gaRuntime['currentPath'][0], PRETTY_PATH_COMPONENTS)) {
+  $gaRuntime['qComponent'] = $gaRuntime['currentPath'][0];
+}
+
+// In the event that the site component isn't defined then redirect to the special "component"
+// The handling for the special "component" is handled above
+if ($gaRuntime['qComponent'] == 'site' && !array_key_exists('site', COMPONENTS)) {
+  gfRedirect(SLASH . 'special' . str_replace('/special', EMPTY_STRING, $gaRuntime['phpRequestURI']));
+}
+
+// Load component based on qComponent
+if (array_key_exists($gaRuntime['qComponent'], COMPONENTS)) {
   $gvComponentFile = COMPONENTS[$gaRuntime['qComponent']];
 
-  if (in_array($gaRuntime['qComponent'], PRETTY_PATH_COMPONENTS) &&
-      $gaRuntime['currentPath'][0] != $gaRuntime['qComponent']) {
-    gfRedirect(SLASH . $gaRuntime['qComponent'] . SLASH);
-  }
-
-  if (in_array($gaRuntime['currentPath'][0], PRETTY_PATH_COMPONENTS)) {
-    $gvComponentFile = COMPONENTS[$gaRuntime['currentPath'][0]];
-  }
-
-  if (!file_exists($gvComponentFile)) {
-    gfErrorOr404('Cannot load the' . SPACE . $gaRuntime['qComponent'] . SPACE . 'component.');
-  }
-
-  require_once($gvComponentFile);
+  file_exists($gvComponentFile) ? require_once($gvComponentFile) :
+  gfErrorOr404('Cannot load the' . SPACE . $gaRuntime['qComponent'] . SPACE . 'component.');
   
   if (headers_sent()) {
     // We're done here.
@@ -397,9 +375,8 @@ elseif ($gaRuntime['qComponent'] && array_key_exists($gaRuntime['qComponent'], C
 
   gfError('The operation completed successfully.');
 }
-else {
-  gfErrorOr404('Invalid component.');
-}
+
+gfErrorOr404('PC LOAD LETTER');
 
 // ====================================================================================================================
 
