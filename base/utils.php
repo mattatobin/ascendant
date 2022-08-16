@@ -53,23 +53,23 @@ const SCHEME_SUFFIX         = COLON . SLASH . SLASH;
 const E_EXCEPTION = 65536;
 
 const PHP_ERROR_CODES       = array(
-  E_ERROR                   => 'System Error',
-  E_WARNING                 => 'System Warning',
-  E_PARSE                   => 'PHP Parser',
-  E_NOTICE                  => 'System Notice',
-  E_CORE_ERROR              => 'Core Error',
-  E_CORE_WARNING            => 'Core Warning',
-  E_COMPILE_ERROR           => 'Compiler Error',
-  E_COMPILE_WARNING         => 'Compiler Warning',
-  E_USER_ERROR              => 'Application Error',
-  E_USER_WARNING            => 'Application Warning',
-  E_USER_NOTICE             => 'Application Notice',
-  E_STRICT                  => 'PHP Strict Mode',
-  E_RECOVERABLE_ERROR       => 'System Error',
-  E_DEPRECATED              => 'System Deprecation',
-  E_USER_DEPRECATED         => 'Application Deprecation',
+  E_ERROR                   => 'PHP Error',
+  E_WARNING                 => 'PHP Warning',
+  E_PARSE                   => 'PHP Error (Parser)',
+  E_NOTICE                  => 'PHP Notice',
+  E_CORE_ERROR              => 'PHP Error (Core)',
+  E_CORE_WARNING            => 'PHP Warning (Core)',
+  E_COMPILE_ERROR           => 'PHP Error (Compiler)',
+  E_COMPILE_WARNING         => 'PHP Warning (Compiler)',
+  E_USER_ERROR              => 'PHP Error (Application)',
+  E_USER_WARNING            => 'PHP Warning (Application)',
+  E_USER_NOTICE             => 'PHP Notice (Application)',
+  E_STRICT                  => 'PHP Error (Strict)',
+  E_RECOVERABLE_ERROR       => 'PHP Error (Recoverable)',
+  E_DEPRECATED              => 'PHP Deprecation',
+  E_USER_DEPRECATED         => 'PHP Deprecation (Application)',
   E_ALL                     => 'Unable to Comply',
-  E_EXCEPTION               => 'Exception',
+  E_EXCEPTION               => 'PHP Exception',
 );
 
 // --------------------------------------------------------------------------------------------------------------------
@@ -227,13 +227,25 @@ function gfReportFailure(array $aMetadata) {
   }
 
   $title = PHP_ERROR_CODES[$aMetadata['code']] ?? PHP_ERROR_CODES[E_ALL];
-  $content = [$aMetadata['message'], $trace];
+  $content = $aMetadata['message'];
 
   if ($generator) {
+    $content = is_string($content) ?
+               '<h3 style="display: block; border-bottom: 1px solid #d6e5f5;">' . $content . '</h3>':
+               EMPTY_STRING;
+
+    $content .= '<p><strong>Guru Meditation:</strong></p><ul style="margin-top: -8px;">';
+
+    foreach ($trace as $_value) {
+      $content .= '<li>' . $_value . '</li>';
+    }
+
+    $content .= '</ul><hr><em>Please contact a system administrator.</em></p>';
+
     gfContent(['title' => $title, 'content' => $content]);
   }
 
-  gfOutput(['title'=> $title, 'content' => $content]);
+  gfOutput(['title'=> $title, 'content' => ['errorMessage' => $content, 'traceback' => $trace]]);
 }
 
 // --------------------------------------------------------------------------------------------------------------------
@@ -286,7 +298,6 @@ function gfError($aMessage) {
 **********************************************************************************************************************/
 function gfSuperVar($aVarType, $aVarValue) {
   // Set up the Error Message Prefix
-  $ePrefix = __FUNCTION__ . DASH_SEPARATOR;
   $rv = null;
 
   // Turn the variable type into all caps prefixed with an underscore
@@ -338,7 +349,7 @@ function gfSuperVar($aVarType, $aVarValue) {
       break;
     default:
       // We don't know WHAT was requested but it is obviously wrong...
-      gfError($ePrefix . 'Incorrect Var Check');
+      gfError('Incorrect Var Check');
   }
   
   // We always pass $_GET values through a general regular expression
@@ -351,7 +362,7 @@ function gfSuperVar($aVarType, $aVarValue) {
   // OK or NO FILE
   if ($rv && $varType == "_FILES") {
     if (!in_array($rv['error'], [UPLOAD_ERR_OK, UPLOAD_ERR_NO_FILE])) {
-      gfError($ePrefix . 'Upload of ' . $aVarValue . ' failed with error code: ' . $rv['error']);
+      gfError('Upload of ' . $aVarValue . ' failed with error code: ' . $rv['error']);
     }
 
     // No file is handled as merely being null
@@ -375,7 +386,6 @@ function gfSuperVar($aVarType, $aVarValue) {
 * @param $aHeader    Short name of header
 **********************************************************************************************************************/
 function gfHeader($aHeader, $aReplace = true) { 
-  $ePrefix = __FUNCTION__ . DASH_SEPARATOR;
   $debugMode = DEBUG_MODE;
   $isErrorPage = in_array($aHeader, [404, 501]);
 
@@ -386,11 +396,11 @@ function gfHeader($aHeader, $aReplace = true) {
   }
 
   if (!array_key_exists($aHeader, HTTP_HEADERS)) {
-    gfError($ePrefix . 'Unknown' . SPACE . $aHeader . SPACE . 'header');
+    gfError('Unknown' . SPACE . $aHeader . SPACE . 'header');
   }
 
   if ($debugMode && $isErrorPage) {
-    gfError($ePrefix . HTTP_HEADERS[$aHeader]);
+    gfError(HTTP_HEADERS[$aHeader]);
   }
 
   if (!headers_sent()) { 
@@ -447,13 +457,12 @@ function gfRedirect($aURL) {
 * @returns                      bitwise int value representing applications
 ***********************************************************************************************************************/
 function gfSubst($aMode, $aSubsts, $aString) {
-  $ePrefix = __FUNCTION__ . DASH_SEPARATOR;
   if (!is_array($aSubsts)) {
-    gfError($ePrefix . '$aSubsts must be an array');
+    gfError('$aSubsts must be an array');
   }
 
   if (!is_string($aString)) {
-    gfError($ePrefix . '$aString must be a string');
+    gfError('$aString must be a string');
   }
 
   $rv = $aString;
@@ -469,11 +478,11 @@ function gfSubst($aMode, $aSubsts, $aString) {
       foreach ($aSubsts as $_key => $_value) { $rv = preg_replace(SLASH . $_key . SLASH . 'iU', $_value, $rv); }
       break;
     default:
-      gfError($ePrefix . 'Unknown mode');
+      gfError('Unknown mode');
   }
 
   if (!$rv) {
-    gfError($ePrefix . 'Something has gone wrong...');
+    gfError('Something has gone wrong...');
   }
 
   return $rv;
@@ -489,10 +498,8 @@ function gfSubst($aMode, $aSubsts, $aString) {
 * @returns             Array of string parts
 ***********************************************************************************************************************/
 function gfExplodeString($aSeparator, $aString) {
-  $ePrefix = __FUNCTION__ . DASH_SEPARATOR;
-
   if (!is_string($aString)) {
-    gfError($ePrefix . 'Specified string is not a string type');
+    gfError('Specified string is not a string type');
   }
 
   if (!str_contains($aString, $aSeparator)) {
@@ -775,14 +782,12 @@ function gfBasicAuthPrompt() {
 * Hash a password
 ***********************************************************************************************************************/
 function gfPasswordHash($aPassword, $aCrypt = PASSWORD_BCRYPT, $aSalt = null) {
-  $ePrefix = __FUNCTION__ . DASH_SEPARATOR;
-
   // We can "hash" a cleartext password by prefixing it with the fake algo prefix $clear$
   if ($aCrypt == PASSWORD_CLEARTEXT) {
     if (str_contains($aPassword, DOLLAR)) {
       // Since the dollar sign is used as an identifier and/or separator for hashes we can't use passwords
       // that contain said dollar sign.
-      gfError($ePrefix . 'Cannot "hash" this Clear Text password because it contains a dollar sign.');
+      gfError('Cannot "hash" this Clear Text password because it contains a dollar sign.');
     }
 
     return DOLLAR . PASSWORD_CLEARTEXT . DOLLAR . time() . DOLLAR . $aPassword;
@@ -855,14 +860,12 @@ function gfPasswordHash($aPassword, $aCrypt = PASSWORD_BCRYPT, $aSalt = null) {
 * Check a password
 ***********************************************************************************************************************/
 function gfPasswordVerify($aPassword, $aHash) {
-  $ePrefix = __FUNCTION__ . DASH_SEPARATOR;
-
   // We can accept a pseudo-hash for clear text passwords in the format of $clrtxt$unix-epoch$clear-text-password
   if (str_starts_with($aHash, DOLLAR . PASSWORD_CLEARTEXT)) {
     $password = gfExplodeString(DOLLAR, $aHash) ?? null;
 
     if ($password == null || count($password) > 3) {
-      gfError($ePrefix . 'Unable to "verify" this Clear Text "hashed" password.');
+      gfError('Unable to "verify" this Clear Text "hashed" password.');
     }
 
     return $aPassword === $password[2];
@@ -873,7 +876,7 @@ function gfPasswordVerify($aPassword, $aHash) {
     $salt = gfExplodeString(DOLLAR, $aHash)[1] ?? null;
 
     if(!$salt) {
-      gfError($ePrefix . 'Unable to verify this Apache APR1-MD5 hashed password.');
+      gfError('Unable to verify this Apache APR1-MD5 hashed password.');
     }
 
     return gfPasswordHash($aPassword, PASSWORD_HTACCESS, $salt) === $aHash;
@@ -1090,109 +1093,6 @@ function gfGenGuid(?string $aVendor = null, $aXPCOM = null) {
   }
 
   return $rv;
-}
-
-// ====================================================================================================================
-
-// == | Objects | ========================================================================================================
-
-/**********************************************************************************************************************
-* Custom Array-like object
-***********************************************************************************************************************/
-class SuperCollection implements ArrayAccess, Countable, Iterator, JsonSerializable {
-  private $collection;
-  private $index;
-  private $position;
-  public $isLocked;
-
-  /********************************************************************************************************************
-  * Class constructor that sets initial state of things
-  ********************************************************************************************************************/
-  public function __construct($aArray = []) {
-    $this->collection = $aArray;
-    $this->index = array_keys($this->collection);
-    $this->position = 0;
-    $this->isLocked = false;
-  }
-
-  /********************************************************************************************************************
-  * Magic Method that handles var_export()
-  ********************************************************************************************************************/
-  public static function __set_state($aValue): object {
-    return $this->collection ?? [];
-  }
-
-  /********************************************************************************************************************
-  * Magic Method that handles the object being cast as a string
-  ********************************************************************************************************************/
-  public function __toString(): string {
-    return json_encode($this->collection ?? [], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
-  }
-
-  /********************************************************************************************************************
-  * Check if the object lock flag has been set
-  ********************************************************************************************************************/
-  private function checkLock() {
-    if ($this->isLocked) {
-      throw new OutOfRangeException('Object instance is locked');
-    }
-  }
-
-  /********************************************************************************************************************
-  * Re-assign the whole object
-  ********************************************************************************************************************/
-  public function reinit($aArray) {
-    $this->checkLock();
-    self::__construct($aArray);
-  }
-
-  /********************************************************************************************************************
-  * Merge the following array with the current array
-  ********************************************************************************************************************/
-  public function update($aArray = []) {
-    $this->checkLock();
-    self::__construct(array_merge($this->collection, $aArray));
-  }
-
-  /********************************************************************************************************************
-  * Implementation for the class declared interfaces
-  ********************************************************************************************************************/
-  // ArrayAccess Interface
-  public function offsetExists($offset): bool { return isset($this->collection[$offset]); }
-  public function offsetGet($offset): mixed { return isset($this->collection[$offset]) ? $this->collection[$offset] : null; }
-  public function offsetSet($offset, $value): void {
-    $this->checkLock();
-
-    if (is_null($offset)) {
-      $this->collection[] = $value;
-      $this->index[] = array_key_last($this->collection);
-    }
-    else {
-      $this->collection[$offset] = $value;
-      if (!in_array($offset, $this->index)) {
-        $this->index[] = $offset;
-      }
-    }
-  }
-  public function offsetUnset($offset): void {
-    $this->checkLock();
-
-    unset($this->collection[$offset], $this->index[array_search($offset,$this->index)]);
-    $this->index = array_values($this->index);
-  }
-
-  // Countable Interface
-  public function count(): int { return count($this->index); }
-
-  // Iterator Interface
-  public function rewind(): void { $this->objectPosition = 0; }
-  public function current(): mixed { return $this->collection[$this->index[$this->objectPosition]]; }
-  public function key(): mixed { return $this->index[$this->objectPosition]; }
-  public function next(): void { ++$this->objectPosition; }
-  public function valid(): bool { return isset($this->index[$this->objectPosition]); }
-
-  // JsonSerializable Interface
-  public function jsonSerialize(): mixed { return $this->collection;}
 }
 
 // ====================================================================================================================

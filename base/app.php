@@ -187,7 +187,7 @@ function gfContent($aMetadata, $aLegacyContent = null, $aTextBox = null, $aList 
   }
 
   if ($pageSubsts['{$SITE_MENU}'] == EMPTY_STRING) {
-    $pageSubsts['{$SITE_MENU}'] = '<li><a href="/">Home</a></li>';
+    $pageSubsts['{$SITE_MENU}'] = '<li><a href="/">Root</a></li>';
   }
 
   $template = gfSubst('string', $pageSubsts, $template);
@@ -218,7 +218,7 @@ function gfCheckPathCount($aExpectedCount) {
 // == | Main | ========================================================================================================
 
 // Define an array that will hold the current application state
-$gaRuntime = new SuperCollection([
+$gaRuntime = array(
   'currentPath'         => null,
   'currentDomain'       => 'localhost',
   'currentSubDomain'    => null,
@@ -233,7 +233,7 @@ $gaRuntime = new SuperCollection([
   'phpServerName'       => gfSuperVar('server', 'SERVER_NAME') ?? 'localhost',
   'qComponent'          => gfSuperVar('get', 'component') ?? 'site',
   'qPath'               => gfSuperVar('get', 'path') ?? SLASH,
-]);
+);
 
 // Set the current domain and subdomain
 $gaRuntime['currentDomain'] = gfSuperVar('check', gfGetDomain($gaRuntime['phpServerName']));
@@ -248,7 +248,7 @@ $gaRuntime['pathCount'] = count($gaRuntime['currentPath']);
 // ------------------------------------------------------------------------------------------------------------------
 
 // Site Offline
-if ($gaRuntime['offlineMode']) {
+if (!SAPI_IS_CLI && $gaRuntime['offlineMode']) {
   $gvOfflineMessage = 'This service is not currently available. Please try again later.';
 
   // Development offline message
@@ -288,7 +288,7 @@ if (in_array('special', [$gaRuntime['currentPath'][0], $gaRuntime['qComponent']]
   }
 
   $gaRuntime['siteMenu'] = [
-    '/'                         => 'Home',
+    '/'                         => 'Root',
     '/special/'                 => 'Special',
     '/special/test/'            => 'Test Cases',
     '/special/software-state/'  => 'Software State',
