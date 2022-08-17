@@ -11,13 +11,12 @@ class classDatabase {
   * Class constructor that sets initial state of things
   ********************************************************************************************************************/
   function __construct() {
-    $ePrefix = __CLASS__ . '::' . __FUNCTION__ . DASH_SEPARATOR;
     global $gaRuntime;
 
     $creds = gfReadFile(gfBuildPath(ROOT_PATH, DATASTORE_RELPATH, '.config', 'sql' . JSON_EXTENSION));
 
     if (!$creds) {
-      gfError($ePrefix . 'Could not read sql configuration');
+      gfError('Could not read sql configuration');
     }
 
     $gaRuntime['currentDatabase'] = $creds['liveDB'];
@@ -29,7 +28,7 @@ class classDatabase {
     $this->connection = mysqli_connect('localhost', $creds['username'], $creds['password'], $gaRuntime['currentDatabase']);
 
     if (mysqli_connect_errno()) {
-      gfError($ePrefix . 'SQL Connection Error: ' . mysqli_connect_errno($this->connection));
+      gfError('SQL Connection Error: ' . mysqli_connect_errno($this->connection));
     }
 
     mysqli_set_charset($this->connection, 'utf8');
@@ -40,7 +39,7 @@ class classDatabase {
   }
 
   /********************************************************************************************************************
-  * Class deconstructor that cleans up items
+  * Class de-constructor that cleans up items
   ********************************************************************************************************************/
   function __destruct() {
     global $gaRuntime;
@@ -56,7 +55,6 @@ class classDatabase {
   * Force a specific database
   ********************************************************************************************************************/
   public function changeDB($aDatabase) {
-    $ePrefix = __CLASS__ . '::' . __FUNCTION__ . DASH_SEPARATOR;
     global $gaRuntime;
 
     $dbChange = mysqli_select_db($this->connection, $aDatabase);
@@ -66,7 +64,7 @@ class classDatabase {
       return $dbChange;
     }
 
-    gfError($ePrefix . ': failed to change database to ' . $aDatabase);
+    gfError(': failed to change database to ' . $aDatabase);
   }
 
   /********************************************************************************************************************
@@ -102,8 +100,6 @@ class classDatabase {
   * @return   array with result or null
   ********************************************************************************************************************/
   public function get($aQueryType, ...$aArgs) {
-    $ePrefix = __CLASS__ . '::' . __FUNCTION__ . DASH_SEPARATOR;
-
     switch ($aQueryType) {
       case 'col':
         $result = $this->sql->getCol(...$aArgs);
@@ -115,7 +111,7 @@ class classDatabase {
         $result = $this->sql->getAll(...$aArgs);
         break;
       default:
-        gfError($ePrefix . ' - Unknown get type');
+        gfError(' - Unknown get type');
     }
 
     return gfSuperVar('var', $result);

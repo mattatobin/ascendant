@@ -291,8 +291,8 @@ if (in_array('special', [$gaRuntime['currentPath'][0], $gaRuntime['qComponent']]
     '/'                         => 'Root',
     '/special/'                 => 'Special',
     '/special/test/'            => 'Test Cases',
-    '/special/software-state/'  => 'Software State',
-    '/special/phpinfo/'         => 'PHP Info',
+    '/special/runtime/'         => 'Runtime Status',
+  /*'/special/phpinfo/'         => 'PHP Info', */
   ];
 
   switch ($gvSpecialFunction) {
@@ -333,13 +333,15 @@ if (in_array('special', [$gaRuntime['currentPath'][0], $gaRuntime['qComponent']]
 
       gfContent(['title' => 'Test Cases', 'content' => $gvContent, 'menu' => $gaRuntime['siteMenu']]);
       break;
-    case 'software-state':
-      gfContent(['title' => 'Software State', 'content' => $gaRuntime, 'menu' => $gaRuntime['siteMenu']]);
+    case 'runtime':
+      gfContent(['title' => 'Runtime Status', 'content' => $gaRuntime, 'menu' => $gaRuntime['siteMenu']]);
       break;
+    /*
     case 'phpinfo':
       ini_set('default_mimetype', 'text/html');
       phpinfo(INFO_GENERAL | INFO_CONFIGURATION | INFO_ENVIRONMENT | INFO_VARIABLES);
       break;
+    */
     default:
       gfHeader(404);
   }
