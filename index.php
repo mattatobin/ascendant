@@ -3,7 +3,8 @@
 
 // Enable Error Reporting
 error_reporting(E_ALL);
-ini_set("display_errors", "on");
+ini_set('display_errors', true);
+ini_set('display_startup_errors', true);
 
 // This is the absolute webroot path
 // It does NOT have a trailing slash

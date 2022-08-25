@@ -213,6 +213,7 @@ function gfOutput($aContent, $aHeader = null) {
 // --------------------------------------------------------------------------------------------------------------------
 
 function gfReportFailure(array $aMetadata) {
+  global $gaRuntime;
   $traceline = fn($eFile, $eLine) => str_replace(ROOT_PATH, EMPTY_STRING, $eFile) . COLON . $eLine;
   $generator = (!SAPI_IS_CLI && function_exists('gfContent')) ? true : false;
   $functions = ['gfErrorHandler', 'gfExceptionHandler', 'trigger_error'];
@@ -240,9 +241,11 @@ function gfReportFailure(array $aMetadata) {
       $content .= '<li>' . $_value . '</li>';
     }
 
-    $content .= '</ul><hr><em>Please contact a system administrator.</em></p>';
+    $content .= '</ul><hr><em>Please contact' . SPACE .
+                (($gaRuntime['debugMode'] ?? null || DEBUG_MODE) ? 'someone who cares' : 'a system administrator') . 
+                DOT . '</em></p>';
 
-    gfContent(['title' => $title, 'content' => $content]);
+    gfContent($content, ['title' => $title]);
   }
 
   gfOutput(['title'=> $title, 'content' => ['errorMessage' => $content, 'traceback' => $trace]]);
@@ -257,7 +260,7 @@ function gfErrorHandler($eCode, $eMessage, $eFile, $eLine) {
   }
 
   gfReportFailure(['code' => $eCode, 'message' => $eMessage, 'file' => $eFile,
-                   'line' => $eLine, 'trace' => debug_backtrace()]);
+                   'line' => $eLine, 'trace' => debug_backtrace(2)]);
 }
 
 set_error_handler("gfErrorHandler");
@@ -274,7 +277,7 @@ set_exception_handler("gfExceptionHandler");
 // --------------------------------------------------------------------------------------------------------------------
 
 function gfError($aMessage) {
-  $trace = debug_backtrace();
+  $trace = debug_backtrace(2);
   gfReportFailure(['code' => E_ALL, 'message' => $aMessage, 'file' => $trace[0]['file'],
                    'line' => $trace[0]['line'], 'trace' => array_slice($trace, 1)]);
 }
@@ -284,38 +287,33 @@ function gfError($aMessage) {
 // == | Global Functions | ============================================================================================
 
 /**********************************************************************************************************************
-* Unified Var Checking
+* Reads globalspace properties
 *
 * @dep DASH_SEPARATOR
 * @dep UNDERSCORE
 * @dep EMPTY_STRING
 * @dep REGEX_GET_FILTER
 * @dep gfError()
-* @param $aVarType        Type of var to check
-* @param $aVarValue       GET/SERVER/EXISTING Normal Var
-* @param $aFalsy          Optional - Allow falsey returns on var/direct
-* @returns                Value or null
 **********************************************************************************************************************/
-function gfSuperVar($aVarType, $aVarValue) {
-  // Set up the Error Message Prefix
+function gfGetProperty($aNode, $aKey, $aDefault = null) {
   $rv = null;
 
   // Turn the variable type into all caps prefixed with an underscore
-  $varType = UNDERSCORE . strtoupper($aVarType);
-
-  // General variable absolute null check unless falsy is allowed
-  if ($varType == "_CHECK" || $varType == "_VAR"){
-    $rv = $aVarValue;
-
-    if (empty($rv) || $rv === 'none' || $rv === 0) {
-      return null;
-    }
-
-    return $rv;
-  }
+  $aNode = UNDERSCORE . strtoupper($aNode);
 
   // This handles the superglobals
-  switch($varType) {
+  switch($aNode) {
+    case '_VAR':
+    case '_CHECK':
+    case '_VALUE':
+      $rv = (empty($aKey) || $aKey === 'none' || $aKey === 0) ? null : $aKey;
+      break;
+    case '_RUNTIME':
+      $rv = $GLOBALS['gaRuntime'][$aKey] ?? $aDefault;
+      break;
+    case '_GLOBAL':
+      $rv = $GLOBALS[$aKey] ?? $aDefault;
+      break;
     case '_GET':
       if (SAPI_IS_CLI && $GLOBALS['argc'] > 1) {
         $args = [];
@@ -328,7 +326,7 @@ function gfSuperVar($aVarType, $aVarValue) {
           }
 
           $attr = str_replace('--', EMPTY_STRING, $arg[0]);
-          $val = gfSuperVar('check', str_replace('"', EMPTY_STRING, $arg[1]));
+          $val = gfGlobalProp('value', str_replace('"', EMPTY_STRING, $arg[1]));
 
           if (!$attr && !$val) {
             continue;
@@ -337,32 +335,33 @@ function gfSuperVar($aVarType, $aVarValue) {
           $args[$attr] = $val;
         }
 
-        $rv = $args[$aVarValue] ?? null;
+        $rv = $args[$aKey] ?? $aDefault;
         break;
       }
     case '_SERVER':
+    case '_ENV':
     case '_FILES':
     case '_POST':
     case '_COOKIE':
     case '_SESSION':
-      $rv = $GLOBALS[$varType][$aVarValue] ?? null;
+      $rv = $GLOBALS[$aNode][$aKey] ?? $aDefault;
       break;
     default:
       // We don't know WHAT was requested but it is obviously wrong...
-      gfError('Incorrect Var Check');
+      gfError('Unknown globalspace node.');
   }
   
   // We always pass $_GET values through a general regular expression
   // This allows only a-z A-Z 0-9 - / { } @ % whitespace and ,
-  if ($rv && $varType == "_GET") {
+  if ($rv && $aNode == "_GET") {
     $rv = preg_replace(REGEX_GET_FILTER, EMPTY_STRING, $rv);
   }
 
   // Files need special handling.. In principle we hard fail if it is anything other than
   // OK or NO FILE
-  if ($rv && $varType == "_FILES") {
+  if ($rv && $aNode == "_FILES") {
     if (!in_array($rv['error'], [UPLOAD_ERR_OK, UPLOAD_ERR_NO_FILE])) {
-      gfError('Upload of ' . $aVarValue . ' failed with error code: ' . $rv['error']);
+      gfError('Upload of ' . $aKey . ' failed with error code: ' . $rv['error']);
     }
 
     // No file is handled as merely being null
@@ -375,6 +374,40 @@ function gfSuperVar($aVarType, $aVarValue) {
   }
   
   return $rv;
+}
+
+/**********************************************************************************************************************
+* Sets globalspace properties
+*
+* @dep UNDERSCORE
+* @dep gfError()
+**********************************************************************************************************************/
+function gfSetProperty(string $aNode, string $aKey, $aValue) {
+  $aNode = UNDERSCORE . strtoupper($aNode);
+  switch($aNode) {
+    case '_RUNTIME':
+      $GLOBALS['gaRuntime'][$aKey] = gfGetProperty('check', $aValue);
+      break;
+    case '_GLOBAL':
+      if ($aKey == 'gaRuntime') {
+        gfError('Unable to set $gaRuntime using the global node');
+      }
+      $GLOBALS[$aKey] = gfGetProperty('check', $aValue);
+      break;
+    case '_VAR':
+    case '_CHECK':
+    case '_GET':
+    case '_SERVER':
+    case '_ENV':
+    case '_FILES':
+    case '_POST':
+    case '_COOKIE':
+    case '_SESSION':
+      gfError('Unable to set a globalspace property on superglobals.');
+    default:
+      // We don't know WHAT was requested but it is obviously wrong...
+      gfError('Unknown globalspace node.');
+  }
 }
 
 /**********************************************************************************************************************
@@ -679,7 +712,7 @@ function gfEnsureModules($aClass, ...$aIncludes) {
 *
 * @dep FILE_EXTS['json']
 * @dep gfError()
-* @dep gfSuperVar()
+* @dep gfGetProperty()
 * @dep $gmAviary - Conditional
 * @param $aFile     File to read
 * @returns          file contents or array if json
@@ -703,7 +736,7 @@ function gfReadFile($aFile) {
     }
   }
 
-  return gfSuperVar('var', $file);
+  return gfGetProperty('var', $file);
 }
 
 /**********************************************************************************************************************
@@ -725,13 +758,13 @@ function gfReadFileFromArchive($aArchive, $aFile) {
 * @dep FILE_EXTS['json']
 * @dep JSON_FLAGS['display']
 * @dep FILE_WRITE_FLAGS
-* @dep gfSuperVar()
+* @dep gfGetProperty()
 * @param $aData     Data to be written
 * @param $aFile     File to write
 * @returns          true else return error string
 **********************************************************************************************************************/
 function gfWriteFile($aData, $aFile, $aRenameFile = null, $aOverwrite = null) {
-  if (!gfSuperVar('var', $aData)) {
+  if (!gfGetProperty('var', $aData)) {
     return 'No useful data to write';
   }
 
