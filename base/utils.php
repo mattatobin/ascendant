@@ -241,9 +241,11 @@ function gfReportFailure(array $aMetadata) {
       $content .= '<li>' . $_value . '</li>';
     }
 
-    $content .= '</ul><hr><em>Please contact' . SPACE .
-                (($gaRuntime['debugMode'] ?? null || DEBUG_MODE) ? 'someone who cares' : 'a system administrator') . 
-                DOT . '</em></p>';
+    $content .= '</ul><hr>' . '<em>' .
+                (($gaRuntime['debugMode'] ?? null || DEBUG_MODE) ?
+                'PHP' . SPACE . PHP_VERSION . SPACE . '(' . PHP_SAPI . ')' :
+                'Please contact a system administrator' . DOT) .
+                '</em></p>';
 
     gfContent($content, ['title' => $title]);
   }
@@ -326,7 +328,7 @@ function gfGetProperty($aNode, $aKey, $aDefault = null) {
           }
 
           $attr = str_replace('--', EMPTY_STRING, $arg[0]);
-          $val = gfGlobalProp('value', str_replace('"', EMPTY_STRING, $arg[1]));
+          $val = gfGetProperty('value', str_replace('"', EMPTY_STRING, $arg[1]));
 
           if (!$attr && !$val) {
             continue;
@@ -754,7 +756,7 @@ function gfWriteFile($aData, $aFile, $aRenameFile = null, $aOverwrite = null) {
 * @param $aLength   Desired number of final chars
 * @returns          Random hexadecimal string of desired length
 **********************************************************************************************************************/
-function gfHexString($aLength = 40) {
+function gfHexString(int $aLength = 40) {
   return bin2hex(random_bytes(($aLength <= 1) ? 1 : (int)($aLength / 2)));
 }
 

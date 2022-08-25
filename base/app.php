@@ -56,7 +56,7 @@ const LIBRARIES = array(
 ***********************************************************************************************************************/
 function gfContent($aContent, array $aMetadata = EMPTY_ARRAY) {
   if (SAPI_IS_CLI) {
-    gfOutput(['content' => $aContent, 'title' => $aMetadata['title']]);
+    gfOutput(['content' => $aContent, 'title' => $aMetadata['title'] ?? 'Output']);
   }
 
   $metadata = fn($aMetaItem) => $aMetadata[$aMetaItem] ?? null;
@@ -98,6 +98,12 @@ function gfContent($aContent, array $aMetadata = EMPTY_ARRAY) {
     '{$SOFTWARE_VERSION}' => SOFTWARE_VERSION,
   );
 
+  if (!$metadata('title') &&
+      gfGetProperty('runtime', 'qTestCase') &&
+      gfGetProperty('runtime', 'qComponent') == 'special') {
+    $substs['{$PAGE_TITLE}'] = 'Test Case' . DASH_SEPARATOR . gfGetProperty('runtime', 'qTestCase');
+  }
+
   $content = gfSubst('str', $substs, $template);
 
   ob_end_clean();
@@ -107,10 +113,10 @@ function gfContent($aContent, array $aMetadata = EMPTY_ARRAY) {
 /**********************************************************************************************************************
 * Check the path count
 ***********************************************************************************************************************/
-function gfCheckPathCount($aExpectedCount) {
-  if ((gfGetProperty('runtime', 'pathCount') ?? 0) > $aExpectedCount) {
+function gfCheckDepth($aExpectedCount) {
+  if ((gfGetProperty('runtime', 'currentDepth') ?? 0) > $aExpectedCount) {
     gfErrorOr404('Expected count was' . SPACE . $aExpectedCount . SPACE .
-                 'but was' . SPACE . gfGetProperty('runtime', 'pathCount'));
+                 'but was' . SPACE . gfGetProperty('runtime', 'currentDepth'));
   }
 }
 
@@ -146,7 +152,7 @@ gfSetProperty('runtime', 'currentSubDomain', gfGetDomain(gfGetProperty('runtime'
 gfSetProperty('runtime', 'currentPath', gfExplodePath(gfGetProperty('runtime', 'qPath')));
 
 // Get a count of the exploded path
-gfSetProperty('runtime', 'pathCount', count(gfGetProperty('runtime', 'currentPath')));
+gfSetProperty('runtime', 'currentDepth', count(gfGetProperty('runtime', 'currentPath')));
 
 // ------------------------------------------------------------------------------------------------------------------
 
@@ -186,7 +192,7 @@ if (in_array('special', [gfGetProperty('runtime', 'currentPath')[0], gfGetProper
   }
   else {
     // URL /special/xxx/
-    gfCheckPathCount(2);
+    gfCheckDepth(2);
     $gvSpecialFunction = gfGetProperty('runtime', 'currentPath')[1];
   }
 
@@ -194,6 +200,8 @@ if (in_array('special', [gfGetProperty('runtime', 'currentPath')[0], gfGetProper
     '/'                         => 'Root',
     '/special/'                 => 'Special',
     '/special/test/'            => 'Test Cases',
+    '/special/hex/'             => 'Hex String',
+    '/special/guid/'            => 'GUID',
     '/special/runtime/'         => 'Runtime Status',
   ));
 
@@ -205,7 +213,7 @@ if (in_array('special', [gfGetProperty('runtime', 'currentPath')[0], gfGetProper
       break;
     case 'test':
       gfSetProperty('runtime', 'qTestCase', gfGetProperty('get', 'case'));
-      $gvTestsPath = gfBuildPath(ROOT_PATH, 'base', 'tests');
+      $gvTestsPath = gfBuildPath(PATHS['base'], 'tests');
       $gaGlobTests = glob($gvTestsPath . WILDCARD . PHP_EXTENSION);
       $gaTests = EMPTY_ARRAY;
 
@@ -236,6 +244,12 @@ if (in_array('special', [gfGetProperty('runtime', 'currentPath')[0], gfGetProper
       break;
     case 'runtime':
       gfContent($gaRuntime, ['title' => 'Runtime Status']);
+      break;
+    case 'hex':
+      gfContent(gfHexString(gfGetProperty('get', 'length', 40)), ['title' => 'Hex String', 'textbox' => true]);
+      break;
+    case 'guid':
+      gfContent(gfGenGuid(gfGetProperty('get', 'vendor'), gfGetProperty('get', 'xpcom')), ['title' => 'GUID', 'textbox' => true]);
       break;
     case 'system':
       ini_set('default_mimetype', 'text/html');
