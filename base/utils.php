@@ -213,7 +213,6 @@ function gfOutput($aContent, $aHeader = null) {
 // --------------------------------------------------------------------------------------------------------------------
 
 function gfReportFailure(array $aMetadata) {
-  global $gaRuntime;
   $traceline = fn($eFile, $eLine) => str_replace(ROOT_PATH, EMPTY_STRING, $eFile) . COLON . $eLine;
   $generator = (!SAPI_IS_CLI && function_exists('gfContent')) ? true : false;
   $functions = ['gfErrorHandler', 'gfExceptionHandler', 'trigger_error'];
@@ -242,7 +241,7 @@ function gfReportFailure(array $aMetadata) {
     }
 
     $content .= '</ul><hr>' . '<em>' .
-                (($gaRuntime['debugMode'] ?? null || DEBUG_MODE) ?
+                ((gfGetProperty('runtime', 'debugMode') || DEBUG_MODE) ?
                 'PHP' . SPACE . PHP_VERSION . SPACE . '(' . PHP_SAPI . ')' :
                 'Please contact a system administrator' . DOT) .
                 '</em></p>';
@@ -424,10 +423,8 @@ function gfHeader($aHeader, $aReplace = true) {
   $debugMode = DEBUG_MODE;
   $isErrorPage = in_array($aHeader, [404, 501]);
 
-  global $gaRuntime;
-
-  if (($gaRuntime['debugMode'] ?? null) || DEBUG_MODE) {
-    $debugMode = $gaRuntime['debugMode'];
+  if (gfGetProperty('runtime', 'debugMode') || DEBUG_MODE) {
+    $debugMode = gfGetProperty('runtime', 'debugMode');
   }
 
   if (!array_key_exists($aHeader, HTTP_HEADERS)) {
@@ -457,9 +454,7 @@ function gfHeader($aHeader, $aReplace = true) {
 * @param $aErrorMessage   Error message if debug
 ***********************************************************************************************************************/
 function gfErrorOr404($aErrorMessage) {
-  global $gaRuntime;
-
-  if ($gaRuntime['debugMode'] ?? null || DEBUG_MODE) {
+  if (gfGetProperty('runtime', 'debugMode') || DEBUG_MODE) {
     gfError($aErrorMessage);
   }
 
@@ -491,15 +486,7 @@ function gfRedirect($aURL) {
 * @param $aRegEx                set to true if pcre
 * @returns                      bitwise int value representing applications
 ***********************************************************************************************************************/
-function gfSubst($aMode, $aSubsts, $aString) {
-  if (!is_array($aSubsts)) {
-    gfError('$aSubsts must be an array');
-  }
-
-  if (!is_string($aString)) {
-    gfError('$aString must be a string');
-  }
-
+function gfSubst(string $aMode, array $aSubsts, string $aString) {
   $rv = $aString;
 
   switch ($aMode) {
@@ -532,31 +519,22 @@ function gfSubst($aMode, $aSubsts, $aString) {
 * @param $aString      String to be exploded
 * @returns             Array of string parts
 ***********************************************************************************************************************/
-function gfExplodeString($aSeparator, $aString) {
-  if (!is_string($aString)) {
-    gfError('Specified string is not a string type');
-  }
-
-  if (!str_contains($aString, $aSeparator)) {
-    return [$aString];
-  }
-
-  $explodedString = array_values(array_filter(explode($aSeparator, $aString), 'strlen'));
-
-  return $explodedString;
+function gfSplitString(string $aSeparator, string $aString) {
+  if (!str_contains($aString, $aSeparator)) { return [$aString]; }
+  return array_values(array_filter(explode($aSeparator, $aString), 'strlen'));
 }
 
 /**********************************************************************************************************************
 * Splits a path into an indexed array of parts
 *
 * @dep SLASH
-* @dep gfExplodeString()
+* @dep gfSplitString()
 * @param $aPath   URI Path
 * @returns        array of uri parts in order
 ***********************************************************************************************************************/
-function gfExplodePath($aPath) {
+function gfSplitPath(string $aPath) {
   if ($aPath == SLASH) { return ['root']; }
-  return gfExplodeString(SLASH, $aPath);
+  return gfSplitString(SLASH, $aPath);
 }
 
 /**********************************************************************************************************************
@@ -569,25 +547,25 @@ function gfExplodePath($aPath) {
 * @returns                      Path string
 ***********************************************************************************************************************/
 function gfBuildPath(...$aPathParts) {
-  $path = implode(SLASH, $aPathParts);
+  $rv = implode(SLASH, $aPathParts);
 
-  $filesystem = str_starts_with($path, ROOT_PATH);
+  $filesystem = str_starts_with($rv, ROOT_PATH);
   
   // Add a pre-pending slash if this is not a file system path
   if (!$filesystem) {
-    $path = SLASH . $path;
+    $rv = SLASH . $rv;
   }
 
   // Add a trailing slash if the last part does not contain a dot
   // If it is a file system path then we will also add a trailing slash if the last part starts with a dot
-  if (!str_contains(basename($path), DOT) || ($filesystem && str_starts_with(basename($path), DOT))) {
-    $path .= SLASH;
+  if (!str_contains(basename($rv), DOT) || ($filesystem && str_starts_with(basename($rv), DOT))) {
+    $rv .= SLASH;
   }
 
   // Remove any cases of multiple slashes
-  $path = preg_replace('#/+#', '/', $path);
+  $rv = preg_replace('#/+#', '/', $rv);
 
-  return $path;
+  return $rv;
 }
 
 /**********************************************************************************************************************
@@ -598,32 +576,28 @@ function gfBuildPath(...$aPathParts) {
 * @param $aPath   Path to be stripped
 * @returns        Stripped path
 ***********************************************************************************************************************/
-function gfStripRootPath($aPath) {
-  return str_replace(ROOT_PATH, EMPTY_STRING, $aPath);
+function gfStripSubstr(string $aPath, string|null $aStripStr = null) {
+  return str_replace($aStripStr ?? ROOT_PATH, EMPTY_STRING, $aPath);
 }
 
 /**********************************************************************************************************************
 * Get a subdomain or base domain from a host
 *
 * @dep DOT
-* @dep gfExplodeString()
+* @dep gfSplitString()
 * @param $aHost       Hostname
 * @param $aReturnSub  Should return subdmain
 * @returns            domain or subdomain
 ***********************************************************************************************************************/
-function gfGetDomain($aHost, $aReturnSub = null) {
-  $host = gfExplodeString(DOT, $aHost);
+function gfGetDomain(string $aHost, bool|null $aReturnSub = null) {
+  $host = gfSplitString(DOT, $aHost);
   $domainSlice = $aReturnSub ? array_slice($host, 0, -2) : array_slice($host, -2, 2);
   $rv = implode(DOT, $domainSlice);
   return $rv;
 }
 
 /**********************************************************************************************************************
-* Includes a module
-*
-* @dep MODULES - Phoebus-Style Array Constant
-* @dep gfError()
-* @param $aModules    List of modules
+* Imports modules
 **********************************************************************************************************************/
 function gfImportModules(...$aModules) {
   if (!defined('MODULES')) {
@@ -660,10 +634,10 @@ function gfImportModules(...$aModules) {
     require(MODULES[$include]);
 
     if ($args) {
-      $GLOBALS[$moduleName] = new $className(...$args);
+      gfSetProperty('global', $moduleName, new $className(...$args));
     }
     else {
-      $GLOBALS[$moduleName] = ($className === false) ? true : new $className();
+      gfSetProperty('global', $moduleName, ($className === false) ? true : new $className());
     }
   }
 }
@@ -675,25 +649,24 @@ function gfImportModules(...$aModules) {
 * @dep gfError()
 * @dep gfGetProperty()
 * @dep $gmAviary - Conditional
-* @param $aFile     File to read
-* @returns          file contents or array if json
-                    null if error, empty string, or empty array
 **********************************************************************************************************************/
-function gfReadFile($aFile) {
+function gfReadFile($aFile, $aDecode = true) {
   $file = @file_get_contents($aFile);
 
-  // Automagically decode json
-  if (str_ends_with($aFile, FILE_EXTS['json'])) {
-    $file = json_decode($file, true);
-  }
+  if ($aDecode) {
+    // Automagically decode json
+    if (str_ends_with($aFile, FILE_EXTS['json'])) {
+      $file = json_decode($file, true);
+    }
 
-  // If it is a mozilla install manifest and the module has been included then parse it
-  if (str_ends_with($aFile, 'install.rdf') && array_key_exists('gmAviary', $GLOBALS)) {
-    global $gmAviary;
-    $file = $gmAviary->parseInstallManifest($file);
+    // If it is a mozilla install manifest and the module has been included then parse it
+    if (str_ends_with($aFile, 'install.rdf') && array_key_exists('gmAviary', $GLOBALS)) {
+      global $gmAviary;
+      $file = $gmAviary->parseInstallManifest($file);
 
-    if (is_string($file)) {
-      gfError('RDF Parsing Error: ' . $file);
+      if (is_string($file)) {
+        gfError('RDF Parsing Error: ' . $file);
+      }
     }
   }
 
@@ -709,7 +682,7 @@ function gfReadFile($aFile) {
 * @returns          file contents or array if json
                     null if error, empty string, or empty array
 **********************************************************************************************************************/
-function gfReadFileFromArchive($aArchive, $aFile) {
+function gfReadZipFile($aArchive, $aFile) {
   return gfReadFile('zip://' . $aArchive . "#" . $aFile);
 }
 
@@ -776,78 +749,77 @@ function gfBasicAuthPrompt() {
 * Hash a password
 ***********************************************************************************************************************/
 function gfPasswordHash($aPassword, $aCrypt = PASSWORD_BCRYPT, $aSalt = null) {
-  // We can "hash" a cleartext password by prefixing it with the fake algo prefix $clear$
-  if ($aCrypt == PASSWORD_CLEARTEXT) {
-    if (str_contains($aPassword, DOLLAR)) {
-      // Since the dollar sign is used as an identifier and/or separator for hashes we can't use passwords
-      // that contain said dollar sign.
-      gfError('Cannot "hash" this Clear Text password because it contains a dollar sign.');
-    }
+  switch ($aCrypt) {
+    case PASSWORD_CLEARTEXT:
+      // We can "hash" a cleartext password by prefixing it with the fake algo prefix $clear$
+      if (str_contains($aPassword, DOLLAR)) {
+        // Since the dollar sign is used as an identifier and/or separator for hashes we can't use passwords
+        // that contain said dollar sign.
+        gfError('Cannot "hash" this Clear Text password because it contains a dollar sign.');
+      }
 
-    return DOLLAR . PASSWORD_CLEARTEXT . DOLLAR . time() . DOLLAR . $aPassword;
+      return DOLLAR . PASSWORD_CLEARTEXT . DOLLAR . time() . DOLLAR . $aPassword;
+    case PASSWORD_HTACCESS:
+      // We want to be able to generate Apache APR1-MD5 hashes for use in .htpasswd situations.
+      $salt = $aSalt;
+
+      if (!$salt) {
+        $salt = EMPTY_STRING;
+
+        for ($i = 0; $i < 8; $i++) {
+          $offset = hexdec(bin2hex(openssl_random_pseudo_bytes(1))) % 64;
+          $salt .= APRMD5_ALPHABET[$offset];
+        }
+      }
+
+      $salt = substr($salt, 0, 8);
+      $max = strlen($aPassword);
+      $context = $aPassword . DOLLAR . PASSWORD_HTACCESS . DOLLAR . $salt;
+      $binary = pack('H32', md5($aPassword . $salt . $aPassword));
+
+      for ($i = $max; $i > 0; $i -= 16) {
+        $context .= substr($binary, 0, min(16, $i));
+      }
+
+      for ($i = $max; $i > 0; $i >>= 1) {
+        $context .= ($i & 1) ? chr(0) : $aPassword[0];
+      }
+
+      $binary = pack('H32', md5($context));
+
+      for ($i = 0; $i < 1000; $i++) {
+        $new = ($i & 1) ? $aPassword : $binary;
+
+        if ($i % 3) {
+          $new .= $salt;
+        }
+        if ($i % 7) {
+          $new .= $aPassword;
+        }
+
+        $new .= ($i & 1) ? $binary : $aPassword;
+        $binary = pack('H32', md5($new));
+      }
+
+      $hash = EMPTY_STRING;
+
+      for ($i = 0; $i < 5; $i++) {
+        $k = $i + 6;
+        $j = $i + 12;
+        if($j == 16) $j = 5;
+        $hash = $binary[$i] . $binary[$k] . $binary[$j] . $hash;
+      }
+
+      $hash = chr(0) . chr(0) . $binary[11] . $hash;
+      $hash = strtr(strrev(substr(base64_encode($hash), 2)), BASE64_ALPHABET, APRMD5_ALPHABET);
+
+      return DOLLAR . PASSWORD_HTACCESS . DOLLAR . $salt . DOLLAR . $hash;
+    default:
+      // Else, our standard (and secure) default is PASSWORD_BCRYPT hashing.
+      // We do not allow custom salts for anything using password_hash as PHP generates secure salts.
+      // PHP Generated passwords are also self-verifiable via password_verify.
+      return password_hash($aPassword, $aCrypt);
   }
-
-  // We want to be able to generate Apache APR1-MD5 hashes for use in .htpasswd situations.
-  if ($aCrypt == PASSWORD_HTACCESS) {
-    $salt = $aSalt;
-
-    if (!$salt) {
-      $salt = EMPTY_STRING;
-
-      for ($i = 0; $i < 8; $i++) {
-        $offset = hexdec(bin2hex(openssl_random_pseudo_bytes(1))) % 64;
-        $salt .= APRMD5_ALPHABET[$offset];
-      }
-    }
-
-    $salt = substr($salt, 0, 8);
-    $max = strlen($aPassword);
-    $context = $aPassword . DOLLAR . PASSWORD_HTACCESS . DOLLAR . $salt;
-    $binary = pack('H32', md5($aPassword . $salt . $aPassword));
-
-    for ($i = $max; $i > 0; $i -= 16) {
-      $context .= substr($binary, 0, min(16, $i));
-    }
-
-    for ($i = $max; $i > 0; $i >>= 1) {
-      $context .= ($i & 1) ? chr(0) : $aPassword[0];
-    }
-
-    $binary = pack('H32', md5($context));
-
-    for ($i = 0; $i < 1000; $i++) {
-      $new = ($i & 1) ? $aPassword : $binary;
-
-      if ($i % 3) {
-        $new .= $salt;
-      }
-      if ($i % 7) {
-        $new .= $aPassword;
-      }
-
-      $new .= ($i & 1) ? $binary : $aPassword;
-      $binary = pack('H32', md5($new));
-    }
-
-    $hash = EMPTY_STRING;
-
-    for ($i = 0; $i < 5; $i++) {
-      $k = $i + 6;
-      $j = $i + 12;
-      if($j == 16) $j = 5;
-      $hash = $binary[$i] . $binary[$k] . $binary[$j] . $hash;
-    }
-
-    $hash = chr(0) . chr(0) . $binary[11] . $hash;
-    $hash = strtr(strrev(substr(base64_encode($hash), 2)), BASE64_ALPHABET, APRMD5_ALPHABET);
-
-    return DOLLAR . PASSWORD_HTACCESS . DOLLAR . $salt . DOLLAR . $hash;
-  }
-
-  // Else, our standard (and secure) default is PASSWORD_BCRYPT hashing.
-  // We do not allow custom salts for anything using password_hash as PHP generates secure salts.
-  // PHP Generated passwords are also self-verifiable via password_verify.
-  return password_hash($aPassword, $aCrypt);
 }
 
 /**********************************************************************************************************************
@@ -856,7 +828,7 @@ function gfPasswordHash($aPassword, $aCrypt = PASSWORD_BCRYPT, $aSalt = null) {
 function gfPasswordVerify($aPassword, $aHash) {
   // We can accept a pseudo-hash for clear text passwords in the format of $clrtxt$unix-epoch$clear-text-password
   if (str_starts_with($aHash, DOLLAR . PASSWORD_CLEARTEXT)) {
-    $password = gfExplodeString(DOLLAR, $aHash) ?? null;
+    $password = gfSplitString(DOLLAR, $aHash) ?? null;
 
     if ($password == null || count($password) > 3) {
       gfError('Unable to "verify" this Clear Text "hashed" password.');
@@ -867,7 +839,7 @@ function gfPasswordVerify($aPassword, $aHash) {
 
   // We can also accept an Apache APR1-MD5 password that is commonly used in .htpasswd
   if (str_starts_with($aHash, DOLLAR . PASSWORD_HTACCESS)) {
-    $salt = gfExplodeString(DOLLAR, $aHash)[1] ?? null;
+    $salt = gfSplitString(DOLLAR, $aHash)[1] ?? null;
 
     if(!$salt) {
       gfError('Unable to verify this Apache APR1-MD5 hashed password.');
@@ -884,7 +856,7 @@ function gfPasswordVerify($aPassword, $aHash) {
 /**********************************************************************************************************************
 * Create an XML Document 
 ***********************************************************************************************************************/
-function gfCreateXML($aData, $aDirectOutput = null) {
+function gfBuildXML($aData, $aDirectOutput = null) {
   $dom = new DOMDocument('1.0');
   $dom->encoding = "UTF-8";
   $dom->formatOutput = true;
@@ -1002,7 +974,7 @@ function gfObjectToArray($aObject) {
 /**********************************************************************************************************************
 * Generates a v4 random guid or a "v4bis" guid with static vendor node
 ***********************************************************************************************************************/
-function gfGenGuid(?string $aVendor = null, $aXPCOM = null) {
+function gfGUID(?string $aVendor = null, $aXPCOM = null) {
   if ($aVendor) {
     if (strlen($aVendor) < 3) {
       gfError('v4bis GUIDs require a defined vendor of more than three characters long.');
@@ -1071,7 +1043,7 @@ function gfGenGuid(?string $aVendor = null, $aXPCOM = null) {
 
   // We want the GUID in XPIDL/C++ Header notation
   if ($aXPCOM) {
-    $explode = gfExplodeString(DASH, $guid);
+    $explode = gfSplitString(DASH, $guid);
     $rv = "%{C++" . NEW_LINE . "//" . SPACE . "{" . $guid . "}" . NEW_LINE .
           "#define NS_CHANGE_ME_CID" . SPACE . 
           vsprintf("{ 0x%s, 0x%s, 0x%s, { 0x%s, 0x%s, 0x%s, 0x%s, 0x%s, 0x%s, 0x%s, 0x%s } }",

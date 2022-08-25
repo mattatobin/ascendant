@@ -87,7 +87,7 @@ function gfContent($aContent, array $aMetadata = EMPTY_ARRAY) {
   }
 
   $substs = array(
-    '{$SKIN_PATH}'        => gfStripRootPath(gfBuildPath(PATHS['skin'], DEFAULT_SKIN)),
+    '{$SKIN_PATH}'        => gfStripSubstr(gfBuildPath(PATHS['skin'], DEFAULT_SKIN)),
     '{$SITE_NAME}'        => defined('SITE_NAME') ? SITE_NAME : SOFTWARE_NAME . SPACE . SOFTWARE_VERSION,
     '{$SITE_MENU}'        => $menuize(gfGetProperty('runtime', 'commandBar') ??
                                       gfGetProperty('runtime', 'siteMenu') ??
@@ -114,7 +114,7 @@ function gfContent($aContent, array $aMetadata = EMPTY_ARRAY) {
 * Check the path count
 ***********************************************************************************************************************/
 function gfCheckDepth($aExpectedCount) {
-  if ((gfGetProperty('runtime', 'currentDepth') ?? 0) > $aExpectedCount) {
+  if ((gfGetProperty('runtime', 'currentDepth', 0)) > $aExpectedCount) {
     gfErrorOr404('Expected count was' . SPACE . $aExpectedCount . SPACE .
                  'but was' . SPACE . gfGetProperty('runtime', 'currentDepth'));
   }
@@ -149,7 +149,7 @@ gfSetProperty('runtime', 'currentDomain', gfGetDomain(gfGetProperty('runtime', '
 gfSetProperty('runtime', 'currentSubDomain', gfGetDomain(gfGetProperty('runtime', 'phpServerName'), true));
 
 // Explode the path if it exists
-gfSetProperty('runtime', 'currentPath', gfExplodePath(gfGetProperty('runtime', 'qPath')));
+gfSetProperty('runtime', 'currentPath', gfSplitPath(gfGetProperty('runtime', 'qPath')));
 
 // Get a count of the exploded path
 gfSetProperty('runtime', 'currentDepth', count(gfGetProperty('runtime', 'currentPath')));
@@ -249,7 +249,7 @@ if (in_array('special', [gfGetProperty('runtime', 'currentPath')[0], gfGetProper
       gfContent(gfHexString(gfGetProperty('get', 'length', 40)), ['title' => 'Hex String', 'textbox' => true]);
       break;
     case 'guid':
-      gfContent(gfGenGuid(gfGetProperty('get', 'vendor'), gfGetProperty('get', 'xpcom')), ['title' => 'GUID', 'textbox' => true]);
+      gfContent(gfGUID(gfGetProperty('get', 'vendor'), gfGetProperty('get', 'xpcom')), ['title' => 'GUID', 'textbox' => true]);
       break;
     case 'system':
       ini_set('default_mimetype', 'text/html');
