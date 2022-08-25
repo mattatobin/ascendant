@@ -635,14 +635,14 @@ function gfImportModules(...$aModules) {
       }
 
       $include = str_replace('static:' , EMPTY_STRING, $_value[0]);
-      $className = 'class' . ucfirst($_value[0]);
+      $className = 'module' . ucfirst($_value[0]);
       $moduleName = 'gm' . ucfirst($_value[0]);
       unset($_value[0]);
       $args = array_values($_value);
     }
     else {
       $include = str_replace('static:' , EMPTY_STRING, $_value);
-      $className = str_starts_with($_value, 'static:') ? false : 'class' . ucfirst($include);
+      $className = str_starts_with($_value, 'static:') ? false : 'module' . ucfirst($include);
       $moduleName = 'gm' . ucfirst($include);
       $args = null;
     }
@@ -665,47 +665,6 @@ function gfImportModules(...$aModules) {
     }
   }
 }
-
-/**********************************************************************************************************************
-* Check if a module has been included
-*
-* @dep EMPTY_ARRAY
-* @dep gfError()
-* @param $aClass      Class name
-* @param $aIncludes   List of includes
-**********************************************************************************************************************/
-function gfEnsureModules($aClass, ...$aIncludes) { 
-  if (!$aClass) {
-    $aClass = "Global";
-  }
-
-  if (empty($aIncludes)) {
-    gfError('You did not specify any modules');
-  }
-  
-  $unloadedModules = EMPTY_ARRAY;
-  $indicative = ' is ';
-  foreach ($aIncludes as $_value) {
-    $moduleName = 'gm' . ucfirst($_value);
-
-    if ($_value == 'vc') {
-      $moduleName = 'gm' . strtoupper($_value);
-    }
-
-    if (!array_key_exists($moduleName, $GLOBALS)) {
-      $unloadedModules[] = $_value;
-    }
-  }
-
-  if (count($unloadedModules) > 0) {
-    if (count($unloadedModules) > 1) {
-      $indicative = ' are ';
-    }
-
-    gfError(implode(', ', $unloadedModules) . $indicative . 'required for ' . $aClass);
-  }
-}
-
 
 /**********************************************************************************************************************
 * Read file (decode json if the file has that extension or parse install.rdf if that is the target file)

@@ -36,11 +36,7 @@ const DATABASES = array(
 
 // Define modules
 const MODULES = array(
-  'account'         => PATHS['modules'] . 'classAccount.php',
-  'aviary'          => PATHS['modules'] . 'classAviary.php',
-  'database'        => PATHS['modules'] . 'classDatabase.php',
-  'addonManifest'   => PATHS['modules'] . 'classAddonManifest.php',
-  'content'         => PATHS['modules'] . 'classContent.php',
+  'database'        => PATHS['modules'] . 'database.php',
   'vc'              => PATHS['modules'] . 'nsIVersionComparator.php',
 );
 
