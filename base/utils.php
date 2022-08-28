@@ -231,20 +231,17 @@ function gfReportFailure(array $aMetadata) {
 
   if ($generator) {
     $content = is_string($content) ?
-               '<h3 style="display: block; border-bottom: 1px solid #d6e5f5;">' . $content . '</h3>':
+               '<h2 style="display: block; border-bottom: 1px solid #d6e5f5; font-weight: bold;">Details</h2>' .
+               '<p>' . $content . '</p>':
                EMPTY_STRING;
 
-    $content .= '<p><strong>Guru Meditation:</strong></p><ul style="margin-top: -8px;">';
+    $content .= '<h3>Traceback:</h3><ul>';
 
     foreach ($trace as $_value) {
       $content .= '<li>' . $_value . '</li>';
     }
 
-    $content .= '</ul><hr>' . '<em>' .
-                ((gfGetProperty('runtime', 'debugMode') || DEBUG_MODE) ?
-                'PHP' . SPACE . PHP_VERSION . SPACE . '(' . PHP_SAPI . ')' :
-                'Please contact a system administrator' . DOT) .
-                '</em></p>';
+    $content .= '</ul><hr><p><em>Please contact a system administrator.</em></p>';
 
     gfContent($content, ['title' => $title]);
   }
@@ -576,7 +573,7 @@ function gfBuildPath(...$aPathParts) {
 * @param $aPath   Path to be stripped
 * @returns        Stripped path
 ***********************************************************************************************************************/
-function gfStripSubstr(string $aPath, string|null $aStripStr = null) {
+function gfStripSubstr(string $aPath, ?string $aStripStr = null) {
   return str_replace($aStripStr ?? ROOT_PATH, EMPTY_STRING, $aPath);
 }
 
@@ -589,7 +586,7 @@ function gfStripSubstr(string $aPath, string|null $aStripStr = null) {
 * @param $aReturnSub  Should return subdmain
 * @returns            domain or subdomain
 ***********************************************************************************************************************/
-function gfGetDomain(string $aHost, bool|null $aReturnSub = null) {
+function gfGetDomain(string $aHost, ?bool $aReturnSub = null) {
   $host = gfSplitString(DOT, $aHost);
   $domainSlice = $aReturnSub ? array_slice($host, 0, -2) : array_slice($host, -2, 2);
   $rv = implode(DOT, $domainSlice);
@@ -599,7 +596,7 @@ function gfGetDomain(string $aHost, bool|null $aReturnSub = null) {
 /**********************************************************************************************************************
 * Imports modules
 **********************************************************************************************************************/
-function gfImportModules(...$aModules) {
+function gfImportModules(string|array ...$aModules) {
   if (!defined('MODULES')) {
     gfError('MODULES is not defined');
   }
@@ -650,7 +647,7 @@ function gfImportModules(...$aModules) {
 * @dep gfGetProperty()
 * @dep $gmAviary - Conditional
 **********************************************************************************************************************/
-function gfReadFile($aFile, $aDecode = true) {
+function gfReadFile(string $aFile, ?bool $aDecode = true) {
   $file = @file_get_contents($aFile);
 
   if ($aDecode) {
@@ -682,7 +679,7 @@ function gfReadFile($aFile, $aDecode = true) {
 * @returns          file contents or array if json
                     null if error, empty string, or empty array
 **********************************************************************************************************************/
-function gfReadZipFile($aArchive, $aFile) {
+function gfReadZipFile(string $aArchive, string $aFile) {
   return gfReadFile('zip://' . $aArchive . "#" . $aFile);
 }
 
@@ -697,7 +694,7 @@ function gfReadZipFile($aArchive, $aFile) {
 * @param $aFile     File to write
 * @returns          true else return error string
 **********************************************************************************************************************/
-function gfWriteFile($aData, $aFile, $aRenameFile = null, $aOverwrite = null) {
+function gfWriteFile(mixed $aData, string $aFile, ?string $aRenameFile = null, ?bool $aOverwrite = null) {
   if (!gfGetProperty('var', $aData)) {
     return 'No useful data to write';
   }
@@ -748,7 +745,7 @@ function gfBasicAuthPrompt() {
 /**********************************************************************************************************************
 * Hash a password
 ***********************************************************************************************************************/
-function gfPasswordHash($aPassword, $aCrypt = PASSWORD_BCRYPT, $aSalt = null) {
+function gfPasswordHash(string $aPassword, mixed $aCrypt = PASSWORD_BCRYPT, ?string $aSalt = null) {
   switch ($aCrypt) {
     case PASSWORD_CLEARTEXT:
       // We can "hash" a cleartext password by prefixing it with the fake algo prefix $clear$
@@ -825,7 +822,7 @@ function gfPasswordHash($aPassword, $aCrypt = PASSWORD_BCRYPT, $aSalt = null) {
 /**********************************************************************************************************************
 * Check a password
 ***********************************************************************************************************************/
-function gfPasswordVerify($aPassword, $aHash) {
+function gfPasswordVerify(string $aPassword, string $aHash) {
   // We can accept a pseudo-hash for clear text passwords in the format of $clrtxt$unix-epoch$clear-text-password
   if (str_starts_with($aHash, DOLLAR . PASSWORD_CLEARTEXT)) {
     $password = gfSplitString(DOLLAR, $aHash) ?? null;
@@ -856,7 +853,7 @@ function gfPasswordVerify($aPassword, $aHash) {
 /**********************************************************************************************************************
 * Create an XML Document 
 ***********************************************************************************************************************/
-function gfBuildXML($aData, $aDirectOutput = null) {
+function gfBuildXML(array $aData, ?bool $aDirectOutput = null) {
   $dom = new DOMDocument('1.0');
   $dom->encoding = "UTF-8";
   $dom->formatOutput = true;
