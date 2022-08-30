@@ -104,7 +104,7 @@ function gfContent($aContent, array $aMetadata = EMPTY_ARRAY) {
     $substs['{$PAGE_TITLE}'] = 'Test Case' . DASH_SEPARATOR . gfGetProperty('runtime', 'qTestCase');
   }
 
-  $content = gfSubst('str', $substs, $template);
+  $content = gfSubst($template, $substs);
 
   ob_end_clean();
   gfOutput($content, 'html');
@@ -218,7 +218,7 @@ if (in_array('special', [gfGetProperty('runtime', 'currentPath')[0], gfGetProper
       $gaTests = EMPTY_ARRAY;
 
       foreach ($gaGlobTests as $_value) {
-        $gaTests[] = gfSubst('str', [PHP_EXTENSION => EMPTY_STRING, $gvTestsPath => EMPTY_STRING], $_value);
+        $gaTests[] = gfSubst($_value, [PHP_EXTENSION => EMPTY_STRING, $gvTestsPath => EMPTY_STRING]);
       }
 
       if (gfGetProperty('runtime', 'qTestCase')) {

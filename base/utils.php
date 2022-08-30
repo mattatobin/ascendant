@@ -483,28 +483,15 @@ function gfRedirect($aURL) {
 * @param $aRegEx                set to true if pcre
 * @returns                      bitwise int value representing applications
 ***********************************************************************************************************************/
-function gfSubst(string $aMode, array $aSubsts, string $aString) {
+function gfSubst(string $aString, array $aSubsts, bool $aRegEx = false) {
   $rv = $aString;
+  $replaceFunction = $aRegEx ? 'preg_replace' : 'str_replace';
 
-  switch ($aMode) {
-    case 'simple':
-    case 'string':
-    case 'str':
-      foreach ($aSubsts as $_key => $_value) { $rv = str_replace($_key, $_value, $rv); }
-      break;
-    case 'regex':
-    case 're':
-      foreach ($aSubsts as $_key => $_value) { $rv = preg_replace(SLASH . $_key . SLASH . 'iU', $_value, $rv); }
-      break;
-    default:
-      gfError('Unknown mode');
+  foreach ($aSubsts as $_key => $_value) {
+    $rv = call_user_func($replaceFunction, ($aRegEx ? SLASH . $_key . SLASH . 'iU' : $_key), $_value, $rv);
   }
 
-  if (!$rv) {
-    gfError('Something has gone wrong...');
-  }
-
-  return $rv;
+  return !$rv ? gfError('Something has gone wrong...') : $rv;
 }
 
 /**********************************************************************************************************************
@@ -517,8 +504,8 @@ function gfSubst(string $aMode, array $aSubsts, string $aString) {
 * @returns             Array of string parts
 ***********************************************************************************************************************/
 function gfSplitString(string $aSeparator, string $aString) {
-  if (!str_contains($aString, $aSeparator)) { return [$aString]; }
-  return array_values(array_filter(explode($aSeparator, $aString), 'strlen'));
+  return (!str_contains($aString, $aSeparator)) ? [$aString] :
+          array_values(array_filter(explode($aSeparator, $aString), 'strlen'));
 }
 
 /**********************************************************************************************************************
@@ -530,8 +517,7 @@ function gfSplitString(string $aSeparator, string $aString) {
 * @returns        array of uri parts in order
 ***********************************************************************************************************************/
 function gfSplitPath(string $aPath) {
-  if ($aPath == SLASH) { return ['root']; }
-  return gfSplitString(SLASH, $aPath);
+  return ($aPath == SLASH) ? ['root'] : gfSplitString(SLASH, $aPath);
 }
 
 /**********************************************************************************************************************
@@ -573,8 +559,8 @@ function gfBuildPath(...$aPathParts) {
 * @param $aPath   Path to be stripped
 * @returns        Stripped path
 ***********************************************************************************************************************/
-function gfStripSubstr(string $aPath, ?string $aStripStr = null) {
-  return str_replace($aStripStr ?? ROOT_PATH, EMPTY_STRING, $aPath);
+function gfStripSubstr(string $aStr, ?string $aStripStr = null) {
+  return str_replace($aStripStr ?? ROOT_PATH, EMPTY_STRING, $aStr);
 }
 
 /**********************************************************************************************************************
@@ -588,9 +574,7 @@ function gfStripSubstr(string $aPath, ?string $aStripStr = null) {
 ***********************************************************************************************************************/
 function gfGetDomain(string $aHost, ?bool $aReturnSub = null) {
   $host = gfSplitString(DOT, $aHost);
-  $domainSlice = $aReturnSub ? array_slice($host, 0, -2) : array_slice($host, -2, 2);
-  $rv = implode(DOT, $domainSlice);
-  return $rv;
+  return implode(DOT, $aReturnSub ? array_slice($host, 0, -2) : array_slice($host, -2, 2));
 }
 
 /**********************************************************************************************************************
@@ -933,7 +917,7 @@ function gfDate($aTypeOrFormat, $aDateStamp, $aReturnTime = null) {
   $format = EMPTY_STRING;
 
   switch ($aTypeOrFormat) {
-    case 'standard':
+    case 'std':
       $format = $aReturnTime ? 'Y-m-D, H:i' : 'Y-m-D';
       break;
     case 'longUS':
@@ -966,6 +950,40 @@ function gfDate($aTypeOrFormat, $aDateStamp, $aReturnTime = null) {
 ***********************************************************************************************************************/
 function gfObjectToArray($aObject) {
   return json_decode(json_encode($aObject), true);
+}
+
+/**********************************************************************************************************************
+* Determines if needle is in haystack and optionally where
+***********************************************************************************************************************/
+function gfContains(string|array $aHaystack, string|array $aNeedle, int $aMode = 0) {
+  if (is_string($aNeedle)) {
+    $aNeedle = [$aNeedle];
+  }
+
+  foreach ($aNeedle as $_value) {
+    if (is_array($aHaystack)) {
+      $rv = ($aMode === 1) ? array_key_exists($_value, $aHaystack) : in_array($_value, $aHaystack);
+    }
+    else {
+      switch ($aMode) {
+        case 1:
+          $rv = str_starts_with($aHaystack, $_value);
+          break;
+        case 2:
+          $rv = str_ends_with($aHaystack, $_value);
+          break;
+        case 0:
+        default:
+          $rv = str_contains($aHaystack, $_value);
+      }
+    }
+
+    if ($rv) {
+      break;
+    }
+  }
+
+  return $rv;
 }
 
 /**********************************************************************************************************************
