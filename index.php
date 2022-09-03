@@ -10,10 +10,15 @@ ini_set('display_startup_errors', true);
 // It does NOT have a trailing slash
 define('ROOT_PATH', empty($_SERVER['DOCUMENT_ROOT']) ? __DIR__ : $_SERVER['DOCUMENT_ROOT']);
 
-// Debug flag
-define('DEBUG_MODE', $_GET['debug'] ?? null);
+// We like CLI
+define('SAPI_IS_CLI', php_sapi_name() == "cli");
+define('CLI_NO_LOGO', in_array('--nologo', $GLOBALS['argv'] ?? []));
+
+// Debug flag (CLI always triggers debug mode)
+define('DEBUG_MODE', $_GET['debug'] ?? SAPI_IS_CLI);
 
 // Define basic constants for the software
+const SOFTWARE_VENDOR     = 'Binary Outcast';
 const SOFTWARE_NAME       = 'Ascendant';
 const SOFTWARE_VERSION    = '28.0.0pre';
 

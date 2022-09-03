@@ -20,10 +20,6 @@ if (defined('BINOC_UTILS')) {
 // Define that this is a thing.
 define('BINOC_UTILS', 1);
 
-// Define if the SAPI is cli
-define('SAPI_IS_CLI', php_sapi_name() == "cli");
-define('CLI_NO_LOGO', in_array('--nologo', $GLOBALS['argv'] ?? []));
-
 // ====================================================================================================================
 
 // == | Global Constants | ============================================================================================
@@ -151,6 +147,8 @@ const APRMD5_ALPHABET       = './0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijk
 
 // --------------------------------------------------------------------------------------------------------------------
 
+const DEFAULT_HOME_TEXT     = 'Site Root (Home)';
+
 // XXX: Remove these!
 const PHP_EXTENSION         = FILE_EXTS['php'];
 const JSON_EXTENSION        = FILE_EXTS['json'];
@@ -189,11 +187,10 @@ function gfOutput($aContent, $aHeader = null) {
   // Send the header if not cli
   if (SAPI_IS_CLI) {
     if (!CLI_NO_LOGO) {
-      $software = SOFTWARE_NAME . SPACE . SOFTWARE_VERSION . DASH_SEPARATOR . $title;
+      $software = $title . DASH_SEPARATOR . SOFTWARE_VENDOR . SPACE . SOFTWARE_NAME . SPACE . SOFTWARE_VERSION;
       $titleLength = 80 - 8 - strlen($software);
       $titleLength = ($titleLength > 0) ? $titleLength : 2;
-      $title = NEW_LINE . '==' . SPACE . PIPE . SPACE . $software . SPACE .
-               PIPE . SPACE . str_repeat('=', $titleLength);
+      $title = NEW_LINE . '==' . SPACE . PIPE . SPACE . $software . SPACE . PIPE . SPACE . str_repeat('=', $titleLength);
       $content = $title . NEW_LINE . NEW_LINE . $content . NEW_LINE . NEW_LINE . str_repeat('=', 80) . NEW_LINE;
     }
   }
@@ -216,7 +213,7 @@ function gfReportFailure(array $aMetadata) {
   $traceline = fn($eFile, $eLine) => str_replace(ROOT_PATH, EMPTY_STRING, $eFile) . COLON . $eLine;
   $generator = (!SAPI_IS_CLI && function_exists('gfContent')) ? true : false;
   $functions = ['gfErrorHandler', 'gfExceptionHandler', 'trigger_error'];
-  $trace = [$traceline($aMetadata['file'], $aMetadata['line'])];
+  $trace = ($aMetadata['file'] && $aMetadata['line']) ? [$traceline($aMetadata['file'], $aMetadata['line'])] : EMPTY_ARRAY;
 
   foreach ($aMetadata['trace'] as $_key => $_value) {
     if (in_array($_value['function'], $functions)) {
@@ -231,7 +228,7 @@ function gfReportFailure(array $aMetadata) {
 
   if ($generator) {
     $content = is_string($content) ?
-               '<h2 style="display: block; border-bottom: 1px solid #d6e5f5; font-weight: bold;">Details</h2>' .
+               '<h2 style="display: block; border-bottom: 1px solid #d6e5f5; font-weight: bold;">Issue Details</h2>' .
                '<p>' . $content . '</p>':
                EMPTY_STRING;
 
@@ -242,6 +239,17 @@ function gfReportFailure(array $aMetadata) {
     }
 
     $content .= '</ul><hr><p><em>Please contact a system administrator.</em></p>';
+
+    $commandBar = ['onclick="history.back()"' => 'Go Back'];
+
+    if (gfGetProperty('runtime', 'qComponent') == 'special' || !array_key_exists('site', COMPONENTS ?? [])) {
+      $commandBar['/special/'] = 'Special Component';
+    }
+    else {
+      $commandBar['/'] = DEFAULT_HOME_TEXT;
+    }
+
+    gfSetProperty('runtime', 'commandBar', $commandBar);
 
     gfContent($content, ['title' => $title]);
   }
@@ -275,9 +283,8 @@ set_exception_handler("gfExceptionHandler");
 // --------------------------------------------------------------------------------------------------------------------
 
 function gfError($aMessage) {
-  $trace = debug_backtrace(2);
-  gfReportFailure(['code' => E_ALL, 'message' => $aMessage, 'file' => $trace[0]['file'],
-                   'line' => $trace[0]['line'], 'trace' => array_slice($trace, 1)]);
+  gfReportFailure(['code' => E_ALL, 'message' => $aMessage, 'file' => null, 'line' => null,
+                   'trace' => debug_backtrace(2)]);
 }
 
 // ====================================================================================================================
@@ -417,12 +424,8 @@ function gfSetProperty(string $aNode, string $aKey, $aValue) {
 * @param $aHeader    Short name of header
 **********************************************************************************************************************/
 function gfHeader($aHeader, $aReplace = true) { 
-  $debugMode = DEBUG_MODE;
+  $debugMode = gfGetProperty('runtime', 'debugMode', DEBUG_MODE);
   $isErrorPage = in_array($aHeader, [404, 501]);
-
-  if (gfGetProperty('runtime', 'debugMode') || DEBUG_MODE) {
-    $debugMode = gfGetProperty('runtime', 'debugMode');
-  }
 
   if (!array_key_exists($aHeader, HTTP_HEADERS)) {
     gfError('Unknown' . SPACE . $aHeader . SPACE . 'header');
@@ -436,10 +439,6 @@ function gfHeader($aHeader, $aReplace = true) {
     header(HTTP_HEADERS[$aHeader], $aReplace);
 
     if ($isErrorPage) {
-      if (SAPI_IS_CLI) {
-        gfOutput(HTTP_HEADERS[$aHeader]);
-      }
-
       exit();
     }
   }
@@ -451,7 +450,7 @@ function gfHeader($aHeader, $aReplace = true) {
 * @param $aErrorMessage   Error message if debug
 ***********************************************************************************************************************/
 function gfErrorOr404($aErrorMessage) {
-  if (gfGetProperty('runtime', 'debugMode') || DEBUG_MODE) {
+  if (gfGetProperty('runtime', 'debugMode', DEBUG_MODE)) {
     gfError($aErrorMessage);
   }
 
@@ -663,7 +662,7 @@ function gfReadFile(string $aFile, ?bool $aDecode = true) {
 * @returns          file contents or array if json
                     null if error, empty string, or empty array
 **********************************************************************************************************************/
-function gfReadZipFile(string $aArchive, string $aFile) {
+function gfReadFilePK(string $aArchive, string $aFile) {
   return gfReadFile('zip://' . $aArchive . "#" . $aFile);
 }
 
@@ -852,9 +851,7 @@ function gfBuildXML(array $aData, ?bool $aDirectOutput = null) {
 
     // Properly handle content using XML and not try and be lazy.. It almost never works!
     if (array_key_exists('@content', $aData) && is_string($aData['@content'])) {
-      if (str_contains($aData['@content'], "<") || str_contains($aData['@content'], ">") ||
-          str_contains($aData['@content'], "?") || str_contains($aData['@content'], "&") ||
-          str_contains($aData['@content'], "'") || str_contains($aData['@content'], '"')) {
+      if (gfContains($aData['@content'], ["<", ">", "?", "&", "'", "\""])) {
         $content = $dom->createCDATASection($aData['@content'] ?? EMPTY_STRING);
       }
       else {

@@ -62,7 +62,16 @@ function gfContent($aContent, array $aMetadata = EMPTY_ARRAY) {
   $metadata = fn($aMetaItem) => $aMetadata[$aMetaItem] ?? null;
   $menuize = function($aMenu) {
     $rv = EMPTY_STRING;
-    foreach ($aMenu as $_key => $_value) { $rv .= '<li><a href="' . $_key . '">' . $_value . '</a></li>'; }
+
+    foreach ($aMenu as $_key => $_value) {
+      if (gfContains($_key, 'onclick=', 1)) {
+        $rv .= '<li><a href="#"' . SPACE . $_key . '>' . $_value . '</a></li>';
+      }
+      else {
+        $rv .= '<li><a href="' . $_key . '">' . $_value . '</a></li>';
+      }
+    }
+
     return $rv;
   };
 
@@ -76,8 +85,8 @@ function gfContent($aContent, array $aMetadata = EMPTY_ARRAY) {
     }
   }
   else {
-    $content = '<textarea class="special-textbox aligncenter" name="content" rows="36" readonly>' .
-               ($metadata('textbox') ? $aContent : json_encode($aContent, JSON_FLAGS['display'])) . '</textarea>';
+    $content = '<form><textarea class="special-textbox" name="content" rows="30" readonly>' .
+               ($metadata('textbox') ? $aContent : json_encode($aContent, JSON_FLAGS['display'])) . '</textarea></form>';
   }
 
   $template = gfReadFile(gfBuildPath(PATHS['skin'], DEFAULT_SKIN, 'template' . FILE_EXTS['xhtml'])); 
@@ -86,23 +95,24 @@ function gfContent($aContent, array $aMetadata = EMPTY_ARRAY) {
     gfError('Could not read template.');
   }
 
+  $commandBar = gfGetProperty('runtime', 'commandBar') ?? gfGetProperty('runtime', 'siteMenu') ?? ['/' => DEFAULT_HOME_TEXT];
+  $isTestCase = (!$metadata('title') && gfGetProperty('runtime', 'qTestCase') && gfGetProperty('runtime', 'qComponent') == 'special');
+  
+  if ($isTestCase) {
+    $substs['{$PAGE_TITLE}'] = '[Test]' . SPACE . gfGetProperty('runtime', 'qTestCase');
+  }
+
   $substs = array(
     '{$SKIN_PATH}'        => gfStripSubstr(gfBuildPath(PATHS['skin'], DEFAULT_SKIN)),
-    '{$SITE_NAME}'        => defined('SITE_NAME') ? SITE_NAME : SOFTWARE_NAME . SPACE . SOFTWARE_VERSION,
-    '{$SITE_MENU}'        => $menuize(gfGetProperty('runtime', 'commandBar') ??
-                                      gfGetProperty('runtime', 'siteMenu') ??
-                                      ['/' => 'Root']),
+    '{$SITE_NAME}'        => (defined('SITE_NAME') ? SITE_NAME :
+                             SOFTWARE_VENDOR . SPACE . SOFTWARE_NAME . SPACE . SOFTWARE_VERSION,
+    '{$SITE_MENU}'        => $menuize($commandBar),
     '{$PAGE_TITLE}'       => $metadata('title') ?? 'Output',
     '{$PAGE_CONTENT}'     => $content,
+    '{$SOFTWARE_VENDOR}'  => SOFTWARE_VENDOR,
     '{$SOFTWARE_NAME}'    => SOFTWARE_NAME,
     '{$SOFTWARE_VERSION}' => SOFTWARE_VERSION,
   );
-
-  if (!$metadata('title') &&
-      gfGetProperty('runtime', 'qTestCase') &&
-      gfGetProperty('runtime', 'qComponent') == 'special') {
-    $substs['{$PAGE_TITLE}'] = 'Test Case' . DASH_SEPARATOR . gfGetProperty('runtime', 'qTestCase');
-  }
 
   $content = gfSubst($template, $substs);
 
@@ -196,20 +206,26 @@ if (in_array('special', [gfGetProperty('runtime', 'currentPath')[0], gfGetProper
     $gvSpecialFunction = gfGetProperty('runtime', 'currentPath')[1];
   }
 
-  gfSetProperty('runtime', 'commandBar', array(
-    '/'                         => 'Root',
-    '/special/'                 => 'Special',
+  $gvCommandBar = array(
+    '/'                         => DEFAULT_HOME_TEXT,
+    '/special/'                 => 'Special Component',
     '/special/test/'            => 'Test Cases',
     '/special/hex/'             => 'Hex String',
     '/special/guid/'            => 'GUID',
     '/special/runtime/'         => 'Runtime Status',
-  ));
+  );
+
+  if (!array_key_exists('site', COMPONENTS)) {
+    unset($gvCommandBar['/']);
+  }
+
+  gfSetProperty('runtime', 'commandBar', $gvCommandBar);
 
   switch ($gvSpecialFunction) {
     case 'root':
       $gvContent = '<h2>Welcome to the Special Component!</h2>' .
                    '<p>Please select a function from the command bar above.';
-      gfContent($gvContent, ['title' => 'Special Component']);
+      gfContent($gvContent, ['title' => 'Special Component Overview']);
       break;
     case 'test':
       gfSetProperty('runtime', 'qTestCase', gfGetProperty('get', 'case'));
