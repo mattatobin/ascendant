@@ -5,6 +5,7 @@
 const SOFTWARE_REPO       = 'about:blank';
 const DEVELOPER_DOMAIN    = 'preview.binaryoutcast.com';
 const DEFAULT_SKIN        = 'default';
+const DEFAULT_SITE_NAME   = 'Binary Outcast';
 
 // --------------------------------------------------------------------------------------------------------------------
 
@@ -94,21 +95,25 @@ function gfContent($aContent, array $aMetadata = EMPTY_ARRAY) {
   if (!$template) {
     gfError('Could not read template.');
   }
+ 
+  $siteName = gfGetProperty('runtime', 'siteName', SOFTWARE_NAME);
+  $sectionName = gfGetProperty('runtime', 'sectionName');
 
-  $commandBar = gfGetProperty('runtime', 'commandBar') ?? gfGetProperty('runtime', 'siteMenu') ?? ['/' => DEFAULT_HOME_TEXT];
-  $isTestCase = (!$metadata('title') && gfGetProperty('runtime', 'qTestCase') && gfGetProperty('runtime', 'qComponent') == 'special');
-  
-  if ($isTestCase) {
-    $substs['{$PAGE_TITLE}'] = '[Test]' . SPACE . gfGetProperty('runtime', 'qTestCase');
+  if ($sectionName) {
+    $siteName = $sectionName . DASH_SEPARATOR . $siteName;
   }
+
+  $commandBar = gfGetProperty('runtime', 'commandBar', ['/' => DEFAULT_HOME_TEXT]);
+  $isTestCase = (!$metadata('title') && gfGetProperty('runtime', 'qTestCase') && gfGetProperty('runtime', 'qComponent') == 'special');
 
   $substs = array(
     '{$SKIN_PATH}'        => gfStripSubstr(gfBuildPath(PATHS['skin'], DEFAULT_SKIN)),
-    '{$SITE_NAME}'        => (defined('SITE_NAME') ? SITE_NAME :
-                             SOFTWARE_VENDOR . SPACE . SOFTWARE_NAME . SPACE . SOFTWARE_VERSION,
+    '{$SITE_NAME}'        => $siteName,
     '{$SITE_MENU}'        => $menuize($commandBar),
-    '{$PAGE_TITLE}'       => $metadata('title') ?? 'Output',
+    '{$SITE_SECTION}'     => $sectionName ?? EMPTY_STRING,
+    '{$PAGE_TITLE}'       => $isTestCase ? '[Test]' . SPACE . gfGetProperty('runtime', 'qTestCase') : ($metadata('title') ?? 'Output'),
     '{$PAGE_CONTENT}'     => $content,
+    '{$PAGE_STATUS}'      => $metadata('status') ?? gfGetProperty('server', 'REQUEST_URI', SLASH) ?? 'Done',
     '{$SOFTWARE_VENDOR}'  => SOFTWARE_VENDOR,
     '{$SOFTWARE_NAME}'    => SOFTWARE_NAME,
     '{$SOFTWARE_VERSION}' => SOFTWARE_VERSION,
@@ -152,6 +157,7 @@ $gaRuntime = array(
   'phpServerName'       => gfGetProperty('server', 'SERVER_NAME', 'localhost'),
   'qComponent'          => gfGetProperty('get', 'component', 'site'),
   'qPath'               => gfGetProperty('get', 'path', SLASH),
+  'siteName'            => DEFAULT_SITE_NAME,
 );
 
 // Set the current domain and subdomain
@@ -193,7 +199,8 @@ if (in_array(gfGetProperty('runtime', 'qComponent'), ['aus', 'discover', 'downlo
 // Handle the Special "component"
 if (in_array('special', [gfGetProperty('runtime', 'currentPath')[0], gfGetProperty('runtime', 'qComponent')])) {
   gfSetProperty('runtime', 'qComponent', 'special');
-  
+  gfSetProperty('runtime', 'sectionName', 'Special Component');
+
   // The Special Component never has more than one level below it
   // We still have to determine the root of the component though...
   if (count(gfGetProperty('runtime', 'currentPath')) == 1) {
@@ -223,9 +230,9 @@ if (in_array('special', [gfGetProperty('runtime', 'currentPath')[0], gfGetProper
 
   switch ($gvSpecialFunction) {
     case 'root':
-      $gvContent = '<h2>Welcome to the Special Component!</h2>' .
-                   '<p>Please select a function from the command bar above.';
-      gfContent($gvContent, ['title' => 'Special Component Overview']);
+      $gvContent = '<h2>Welcome</h2>' .
+                   '<p>Please select a special function from the command bar above.';
+      gfContent($gvContent, ['title' => 'Overview']);
       break;
     case 'test':
       gfSetProperty('runtime', 'qTestCase', gfGetProperty('get', 'case'));
@@ -296,8 +303,9 @@ if (gfGetProperty('runtime', 'qComponent') == 'site' && !array_key_exists('site'
 if (array_key_exists(gfGetProperty('runtime', 'qComponent'), COMPONENTS)) {
   $gvComponentFile = COMPONENTS[gfGetProperty('runtime', 'qComponent')];
 
-  file_exists($gvComponentFile) ? require_once($gvComponentFile) :
-  gfErrorOr404('Cannot load the' . SPACE . gfGetProperty('runtime', 'qComponent') . SPACE . 'component.');
+  $gvFinalResult = file_exists($gvComponentFile) ?
+                   require_once($gvComponentFile) :
+                   gfErrorOr404('Cannot load the' . SPACE . gfGetProperty('runtime', 'qComponent') . SPACE . 'component.');
   
   if (headers_sent()) {
     // We're done here.

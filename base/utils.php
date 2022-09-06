@@ -188,10 +188,10 @@ function gfOutput($aContent, $aHeader = null) {
   if (SAPI_IS_CLI) {
     if (!CLI_NO_LOGO) {
       $software = $title . DASH_SEPARATOR . SOFTWARE_VENDOR . SPACE . SOFTWARE_NAME . SPACE . SOFTWARE_VERSION;
-      $titleLength = 80 - 8 - strlen($software);
+      $titleLength = 120 - 8 - strlen($software);
       $titleLength = ($titleLength > 0) ? $titleLength : 2;
       $title = NEW_LINE . '==' . SPACE . PIPE . SPACE . $software . SPACE . PIPE . SPACE . str_repeat('=', $titleLength);
-      $content = $title . NEW_LINE . NEW_LINE . $content . NEW_LINE . NEW_LINE . str_repeat('=', 80) . NEW_LINE;
+      $content = $title . NEW_LINE . NEW_LINE . $content . NEW_LINE . NEW_LINE . str_repeat('=', 120) . NEW_LINE;
     }
   }
   else {
@@ -251,6 +251,7 @@ function gfReportFailure(array $aMetadata) {
 
     gfSetProperty('runtime', 'commandBar', $commandBar);
 
+    unset($GLOBALS['gaRuntime']['sectionName']);
     gfContent($content, ['title' => $title]);
   }
 
@@ -353,7 +354,7 @@ function gfGetProperty($aNode, $aKey, $aDefault = null) {
       break;
     default:
       // We don't know WHAT was requested but it is obviously wrong...
-      gfError('Unknown globalspace node.');
+      gfError('Unknown global node.');
   }
   
   // We always pass $_GET values through a general regular expression
@@ -387,32 +388,31 @@ function gfGetProperty($aNode, $aKey, $aDefault = null) {
 * @dep UNDERSCORE
 * @dep gfError()
 **********************************************************************************************************************/
-function gfSetProperty(string $aNode, string $aKey, $aValue) {
+function gfSetProperty(string $aNode, string|int $aKey, $aValue = null) {
   $aNode = UNDERSCORE . strtoupper($aNode);
-  switch($aNode) {
-    case '_RUNTIME':
+
+  if ($aNode == '_RUNTIME') {
+    if ($aValue === null) {
+      unset($GLOBALS['gaRuntime'][$aKey]);
+    }
+    else {
       $GLOBALS['gaRuntime'][$aKey] = gfGetProperty('check', $aValue);
-      break;
-    case '_GLOBAL':
-      if ($aKey == 'gaRuntime') {
-        gfError('Unable to set $gaRuntime using the global node');
-      }
-      $GLOBALS[$aKey] = gfGetProperty('check', $aValue);
-      break;
-    case '_VAR':
-    case '_CHECK':
-    case '_GET':
-    case '_SERVER':
-    case '_ENV':
-    case '_FILES':
-    case '_POST':
-    case '_COOKIE':
-    case '_SESSION':
-      gfError('Unable to set a globalspace property on superglobals.');
-    default:
-      // We don't know WHAT was requested but it is obviously wrong...
-      gfError('Unknown globalspace node.');
+    }
   }
+  else {
+    if ($aKey == 'gaRuntime') {
+      gfError('Unable to set $gaRuntime using the global node');
+    }
+
+    if ($aValue === null) {
+      unset($GLOBALS[$aKey]);
+    }
+    else {
+      $GLOBALS[$aKey] = gfGetProperty('check', $aValue);
+    }
+  }
+
+  return true;
 }
 
 /**********************************************************************************************************************
