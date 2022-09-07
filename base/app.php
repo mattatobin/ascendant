@@ -30,6 +30,9 @@ const COMPONENTS = array(
   'update'          => PATHS['components'] . 'update.php',
 );
 
+// These components have pretty path slugs
+const COMPONENT_SLUGS = ['special', 'panel'];
+
 // Define databases
 const DATABASES = array(
   'emailBlacklist'  => PATHS['databases'] . 'emailBlacklist.php',
@@ -47,6 +50,10 @@ const LIBRARIES = array(
   'safeMySQL'       => PATHS['libraries'] . 'safemysql.class.php',
   'smarty'          => PATHS['libraries'] . 'smarty' . SLASH . 'Smarty.class.php',
 );
+
+// --------------------------------------------------------------------------------------------------------------------
+
+
 
 // ====================================================================================================================
 
@@ -130,9 +137,103 @@ function gfContent($aContent, array $aMetadata = EMPTY_ARRAY) {
 ***********************************************************************************************************************/
 function gfCheckDepth($aExpectedCount) {
   if ((gfGetProperty('runtime', 'currentDepth', 0)) > $aExpectedCount) {
-    gfErrorOr404('Expected count was' . SPACE . $aExpectedCount . SPACE .
+    gfSend404('Expected count was' . SPACE . $aExpectedCount . SPACE .
                  'but was' . SPACE . gfGetProperty('runtime', 'currentDepth'));
   }
+}
+
+/**********************************************************************************************************************
+* The Special Component
+***********************************************************************************************************************/
+function gfSpecialComponent() {
+  global $gaRuntime;
+
+  gfSetProperty('runtime', 'qComponent', 'special');
+  gfSetProperty('runtime', 'sectionName', 'Special Component');
+
+  // The Special Component never has more than one level below it
+  // We still have to determine the root of the component though...
+  if (count(gfGetProperty('runtime', 'currentPath')) == 1) {
+    // URL /special/
+    $spSpecialFunction = 'root';
+  }
+  else {
+    // URL /special/xxx/
+    gfCheckDepth(2);
+    $spSpecialFunction = gfGetProperty('runtime', 'currentPath')[1];
+  }
+
+  $spCommandBar = array(
+    '/'                         => DEFAULT_HOME_TEXT,
+    '/special/'                 => 'Special Component',
+    '/special/test/'            => 'Test Cases',
+    '/special/hex/'             => 'Hex String',
+    '/special/guid/'            => 'GUID',
+    '/special/runtime/'         => 'Runtime Status',
+  );
+
+  if (!array_key_exists('site', COMPONENTS)) {
+    unset($spCommandBar['/']);
+  }
+
+  gfSetProperty('runtime', 'commandBar', $spCommandBar);
+
+  switch ($spSpecialFunction) {
+    case 'root':
+      $spContent = '<h2>Welcome</h2>' .
+                   '<p>Please select a special function from the command bar above.';
+      gfContent($spContent, ['title' => 'Overview']);
+      break;
+    case 'test':
+      gfSetProperty('runtime', 'qTestCase', gfGetProperty('get', 'case'));
+      $spTestsPath = gfBuildPath(PATHS['base'], 'tests');
+      $spGlobTests = glob($spTestsPath . WILDCARD . PHP_EXTENSION);
+      $spTests = EMPTY_ARRAY;
+
+      foreach ($spGlobTests as $_value) {
+        $spTests[] = gfSubst($_value, [PHP_EXTENSION => EMPTY_STRING, $spTestsPath => EMPTY_STRING]);
+      }
+
+      if (gfGetProperty('runtime', 'qTestCase')) {
+        if (!in_array(gfGetProperty('runtime', 'qTestCase'), $spTests)) {
+          gfError('Unknown test case');
+        }
+
+        require_once($spTestsPath . gfGetProperty('runtime', 'qTestCase') . PHP_EXTENSION);
+        headers_sent() ? exit() : gfError('The operation completed successfully.');
+      }
+
+      $spContent = EMPTY_STRING;
+
+      foreach ($spTests as $_value) {
+        $spContent .= '<li><a href="/special/test/?case=' . $_value . '">' . $_value . '</a></li>';
+      }
+
+      $spContent = ($spContent == EMPTY_STRING) ?
+                   '<p>There are no test cases.</p>' :
+                   '<h2>Please select a test case&hellip;</h2><ul>' . $spContent . '</ul>' . str_repeat('<br />', 3);
+
+      gfContent($spContent, ['title' => 'Test Cases']);
+      break;
+    case 'runtime':
+      gfContent($gaRuntime, ['title' => 'Runtime Status']);
+      break;
+    case 'hex':
+      gfContent(gfHexString(gfGetProperty('get', 'length', 40)), ['title' => 'Hex String', 'textbox' => true]);
+      break;
+    case 'guid':
+      gfContent(gfGUID(gfGetProperty('get', 'vendor'), gfGetProperty('get', 'xpcom')), ['title' => 'GUID', 'textbox' => true]);
+      break;
+    case 'system':
+      ini_set('default_mimetype', 'text/html');
+      phpinfo(/* INFO_GENERAL | INFO_CONFIGURATION | INFO_ENVIRONMENT | INFO_VARIABLES */);
+      break;
+    default:
+      gfHeader(404);
+  }
+
+  // We're done here
+  exit();
 }
 
 // ====================================================================================================================
@@ -161,8 +262,8 @@ $gaRuntime = array(
 );
 
 // Set the current domain and subdomain
-gfSetProperty('runtime', 'currentDomain', gfGetDomain(gfGetProperty('runtime', 'phpServerName')));
-gfSetProperty('runtime', 'currentSubDomain', gfGetDomain(gfGetProperty('runtime', 'phpServerName'), true));
+gfSetProperty('runtime', 'currentDomain', binocConsoleUtils::getDomain(gfGetProperty('runtime', 'phpServerName')));
+gfSetProperty('runtime', 'currentSubDomain', binocConsoleUtils::getDomain(gfGetProperty('runtime', 'phpServerName'), true));
 
 // Explode the path if it exists
 gfSetProperty('runtime', 'currentPath', gfSplitPath(gfGetProperty('runtime', 'qPath')));
@@ -196,126 +297,32 @@ if (in_array(gfGetProperty('runtime', 'qComponent'), ['aus', 'discover', 'downlo
 
 // ------------------------------------------------------------------------------------------------------------------
 
-// Handle the Special "component"
-if (in_array('special', [gfGetProperty('runtime', 'currentPath')[0], gfGetProperty('runtime', 'qComponent')])) {
-  gfSetProperty('runtime', 'qComponent', 'special');
-  gfSetProperty('runtime', 'sectionName', 'Special Component');
-
-  // The Special Component never has more than one level below it
-  // We still have to determine the root of the component though...
-  if (count(gfGetProperty('runtime', 'currentPath')) == 1) {
-    // URL /special/
-    $gvSpecialFunction = 'root';
-  }
-  else {
-    // URL /special/xxx/
-    gfCheckDepth(2);
-    $gvSpecialFunction = gfGetProperty('runtime', 'currentPath')[1];
-  }
-
-  $gvCommandBar = array(
-    '/'                         => DEFAULT_HOME_TEXT,
-    '/special/'                 => 'Special Component',
-    '/special/test/'            => 'Test Cases',
-    '/special/hex/'             => 'Hex String',
-    '/special/guid/'            => 'GUID',
-    '/special/runtime/'         => 'Runtime Status',
-  );
-
-  if (!array_key_exists('site', COMPONENTS)) {
-    unset($gvCommandBar['/']);
-  }
-
-  gfSetProperty('runtime', 'commandBar', $gvCommandBar);
-
-  switch ($gvSpecialFunction) {
-    case 'root':
-      $gvContent = '<h2>Welcome</h2>' .
-                   '<p>Please select a special function from the command bar above.';
-      gfContent($gvContent, ['title' => 'Overview']);
-      break;
-    case 'test':
-      gfSetProperty('runtime', 'qTestCase', gfGetProperty('get', 'case'));
-      $gvTestsPath = gfBuildPath(PATHS['base'], 'tests');
-      $gaGlobTests = glob($gvTestsPath . WILDCARD . PHP_EXTENSION);
-      $gaTests = EMPTY_ARRAY;
-
-      foreach ($gaGlobTests as $_value) {
-        $gaTests[] = gfSubst($_value, [PHP_EXTENSION => EMPTY_STRING, $gvTestsPath => EMPTY_STRING]);
-      }
-
-      if (gfGetProperty('runtime', 'qTestCase')) {
-        if (!in_array(gfGetProperty('runtime', 'qTestCase'), $gaTests)) {
-          gfError('Unknown test case');
-        }
-
-        require_once($gvTestsPath . gfGetProperty('runtime', 'qTestCase') . PHP_EXTENSION);
-        exit();
-      }
-
-      $gvContent = EMPTY_STRING;
-
-      foreach ($gaTests as $_value) {
-        $gvContent .= '<li><a href="/special/test/?case=' . $_value . '">' . $_value . '</a></li>';
-      }
-
-      $gvContent = ($gvContent == EMPTY_STRING) ?
-                   '<p>There are no test cases.</p>' :
-                   '<h2>Please select a test case&hellip;</h2><ul>' . $gvContent . '</ul>' . str_repeat('<br />', 3);
-
-      gfContent($gvContent, ['title' => 'Test Cases']);
-      break;
-    case 'runtime':
-      gfContent($gaRuntime, ['title' => 'Runtime Status']);
-      break;
-    case 'hex':
-      gfContent(gfHexString(gfGetProperty('get', 'length', 40)), ['title' => 'Hex String', 'textbox' => true]);
-      break;
-    case 'guid':
-      gfContent(gfGUID(gfGetProperty('get', 'vendor'), gfGetProperty('get', 'xpcom')), ['title' => 'GUID', 'textbox' => true]);
-      break;
-    case 'system':
-      ini_set('default_mimetype', 'text/html');
-      phpinfo(/* INFO_GENERAL | INFO_CONFIGURATION | INFO_ENVIRONMENT | INFO_VARIABLES */);
-      break;
-    default:
-      gfHeader(404);
-  }
-
-  // We're done here
-  exit();
-}
-
-// ------------------------------------------------------------------------------------------------------------------
-
 // Handle pretty urls that override the site component
-if (in_array(gfGetProperty('runtime', 'currentPath')[0], ['panel'])) {
+if (in_array(gfGetProperty('runtime', 'currentPath')[0], COMPONENT_SLUGS)) {
   gfSetProperty('runtime', 'qComponent', gfGetProperty('runtime', 'currentPath')[0]);
 }
 
 // In the event that the site component isn't defined then redirect to the special "component"
-// The handling for the special "component" is handled above
 if (gfGetProperty('runtime', 'qComponent') == 'site' && !array_key_exists('site', COMPONENTS)) {
-  gfRedirect(SLASH . 'special' . str_replace('/special', EMPTY_STRING, gfGetProperty('runtime', 'phpRequestURI')));
+  gfRedirect(SLASH . 'special' . gfGetProperty('runtime', 'phpRequestURI'));
 }
 
 // Load component based on qComponent
 if (array_key_exists(gfGetProperty('runtime', 'qComponent'), COMPONENTS)) {
   $gvComponentFile = COMPONENTS[gfGetProperty('runtime', 'qComponent')];
-
-  $gvFinalResult = file_exists($gvComponentFile) ?
-                   require_once($gvComponentFile) :
-                   gfErrorOr404('Cannot load the' . SPACE . gfGetProperty('runtime', 'qComponent') . SPACE . 'component.');
+  $gvComponentFile = file_exists($gvComponentFile) ?
+                     require_once($gvComponentFile) :
+                     gfSend404('Cannot load the' . SPACE . gfGetProperty('runtime', 'qComponent') . SPACE . 'component.');
   
-  if (headers_sent()) {
-    // We're done here.
-    exit();
-  }
-
-  gfError('The operation completed successfully.');
+  headers_sent() ? exit() : gfError('The operation completed successfully.');
 }
 
-gfErrorOr404('PC LOAD LETTER');
+if (gfGetProperty('runtime', 'qComponent') == 'special') {
+  gfSpecialComponent();
+  
+}
+
+gfSend404('PC LOAD LETTER');
 
 // ====================================================================================================================
 

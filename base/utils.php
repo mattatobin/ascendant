@@ -1,12 +1,23 @@
 <?php
-// This Source Code Form is subject to the terms of the Mozilla Public
-// License, v. 2.0. If a copy of the MPL was not distributed with this
-// file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-// == | Setup | =======================================================================================================
+// == | Setup | ======================================================================================================
+
+// We like CLI
+define('SAPI_IS_CLI', php_sapi_name() == "cli");
+define('CLI_NO_LOGO', in_array('--nologo', $GLOBALS['argv'] ?? []));
+
+// Enable Error Reporting
+error_reporting(E_ALL);
+ini_set('display_errors', true);
+ini_set('display_startup_errors', true);
+
+// Debug flag (CLI always triggers debug mode)
+define('DEBUG_MODE', $_GET['debug'] ?? SAPI_IS_CLI);
+
+// --------------------------------------------------------------------------------------------------------------------
 
 // Check if the basic defines have been defined in the including script
-foreach (['ROOT_PATH', 'DEBUG_MODE',  'SOFTWARE_NAME', 'SOFTWARE_VERSION'] as $_value) {
+foreach (['ROOT_PATH', 'SOFTWARE_VENDOR', 'SOFTWARE_NAME', 'SOFTWARE_VERSION'] as $_value) {
   if (!defined($_value)) {
     die('Binary Outcast Utilities: ' . $_value . ' must be defined before including this file.');
   }
@@ -14,7 +25,7 @@ foreach (['ROOT_PATH', 'DEBUG_MODE',  'SOFTWARE_NAME', 'SOFTWARE_VERSION'] as $_
 
 // Do not allow this to be included more than once...
 if (defined('BINOC_UTILS')) {
-  die('Binary Outcast Utilities: You may not include this more than once.');
+  die('Binary Outcast Utilities: You may not include this file more than once.');
 }
 
 // Define that this is a thing.
@@ -38,52 +49,10 @@ const PIPE                  = "|";
 const AMP                   = "&";
 const DOLLAR                = "\$";
 const COLON                 = ":";
-const DBLCOLON              = COLON . COLON;
+const SCOPE                 = COLON . COLON;
 const DOTDOT                = DOT . DOT;
 const DASH_SEPARATOR        = SPACE . DASH . SPACE;
 const SCHEME_SUFFIX         = COLON . SLASH . SLASH;
-
-// --------------------------------------------------------------------------------------------------------------------
-
-// define E_EXCEPTION
-const E_EXCEPTION = 65536;
-
-const PHP_ERROR_CODES       = array(
-  E_ERROR                   => 'PHP Error',
-  E_WARNING                 => 'PHP Warning',
-  E_PARSE                   => 'PHP Error (Parser)',
-  E_NOTICE                  => 'PHP Notice',
-  E_CORE_ERROR              => 'PHP Error (Core)',
-  E_CORE_WARNING            => 'PHP Warning (Core)',
-  E_COMPILE_ERROR           => 'PHP Error (Compiler)',
-  E_COMPILE_WARNING         => 'PHP Warning (Compiler)',
-  E_USER_ERROR              => 'PHP Error (Application)',
-  E_USER_WARNING            => 'PHP Warning (Application)',
-  E_USER_NOTICE             => 'PHP Notice (Application)',
-  E_STRICT                  => 'PHP Error (Strict)',
-  E_RECOVERABLE_ERROR       => 'PHP Error (Recoverable)',
-  E_DEPRECATED              => 'PHP Deprecation',
-  E_USER_DEPRECATED         => 'PHP Deprecation (Application)',
-  E_ALL                     => 'Unable to Comply',
-  E_EXCEPTION               => 'PHP Exception',
-);
-
-// --------------------------------------------------------------------------------------------------------------------
-
-const HTTP_HEADERS          = array(
-  404                       => 'HTTP/1.1 404 Not Found',
-  501                       => 'HTTP/1.1 501 Not Implemented',
-  'text'                    => 'Content-Type: text/plain',
-  'html'                    => 'Content-Type: text/html',
-  'xhtml'                   => 'Content-Type: application/xhtml+xml',
-  'css'                     => 'Content-Type: text/css',
-  'xml'                     => 'Content-Type: text/xml',
-  'json'                    => 'Content-Type: application/json',
-  'bin'                     => 'Content-Type: application/octet-stream',
-  'xpi'                     => 'Content-Type: application/x-xpinstall',
-  '7z'                      => 'Content-Type: application/x-7z-compressed',
-  'xz'                      => 'Content-Type: application/x-xz',
-);
 
 // --------------------------------------------------------------------------------------------------------------------
 
@@ -160,133 +129,259 @@ const JSON_ENCODE_FLAGS     = JSON_FLAGS['display'];
 
 // == | Output and Error Handling | ===================================================================================
 
-/**********************************************************************************************************************
-* Simply prints output and sends header if not cli and exits
-**********************************************************************************************************************/
-function gfOutput($aContent, $aHeader = null) {
-  $content = null;
+class binocConsoleUtils {
+  const HTTP_HEADERS = array(
+    404                       => 'HTTP/1.1 404 Not Found',
+    501                       => 'HTTP/1.1 501 Not Implemented',
+    'text'                    => 'Content-Type: text/plain',
+    'html'                    => 'Content-Type: text/html',
+    'xhtml'                   => 'Content-Type: application/xhtml+xml',
+    'css'                     => 'Content-Type: text/css',
+    'xml'                     => 'Content-Type: text/xml',
+    'json'                    => 'Content-Type: application/json',
+    'bin'                     => 'Content-Type: application/octet-stream',
+    'xpi'                     => 'Content-Type: application/x-xpinstall',
+    '7z'                      => 'Content-Type: application/x-7z-compressed',
+    'xz'                      => 'Content-Type: application/x-xz',
+  );
 
-  if (is_array($aContent)) {
-    $title = $aContent['metadata']['title'] ?? $aContent['title'] ?? 'Output';
-    $content = $aContent['legacyContent'] ??
-               $aContent['metadata']['content'] ??
-               $aContent['content'] ??
-               EMPTY_STRING;
+  const PHP_ERROR_CODES = array(
+    E_ERROR                   => 'PHP Error',
+    E_WARNING                 => 'PHP Warning',
+    E_PARSE                   => 'PHP Error (Parser)',
+    E_NOTICE                  => 'PHP Notice',
+    E_CORE_ERROR              => 'PHP Error (Core)',
+    E_CORE_WARNING            => 'PHP Warning (Core)',
+    E_COMPILE_ERROR           => 'PHP Error (Compiler)',
+    E_COMPILE_WARNING         => 'PHP Warning (Compiler)',
+    E_USER_ERROR              => 'PHP Error (Application)',
+    E_USER_WARNING            => 'PHP Warning (Application)',
+    E_USER_NOTICE             => 'PHP Notice (Application)',
+    E_STRICT                  => 'PHP Error (Strict)',
+    E_RECOVERABLE_ERROR       => 'PHP Error (Recoverable)',
+    E_DEPRECATED              => 'PHP Deprecation',
+    E_USER_DEPRECATED         => 'PHP Deprecation (Application)',
+    E_ALL                     => 'Unable to Comply',
+    E_EXCEPTION               => 'PHP Exception',
+  );
 
-    if ($title == 'Output' && $content == EMPTY_STRING) {
-      $content = $aContent ?? $content;
-    }
-  }
-  else {
-    $title = 'Output';
-    $content = $aContent ?? EMPTY_STRING;
-  }
-
-  $content = (is_string($content) || is_int($content)) ? $content : json_encode($content, JSON_FLAGS['display']);
-
-  // Send the header if not cli
-  if (SAPI_IS_CLI) {
-    if (!CLI_NO_LOGO) {
-      $software = $title . DASH_SEPARATOR . SOFTWARE_VENDOR . SPACE . SOFTWARE_NAME . SPACE . SOFTWARE_VERSION;
-      $titleLength = 120 - 8 - strlen($software);
-      $titleLength = ($titleLength > 0) ? $titleLength : 2;
-      $title = NEW_LINE . '==' . SPACE . PIPE . SPACE . $software . SPACE . PIPE . SPACE . str_repeat('=', $titleLength);
-      $content = $title . NEW_LINE . NEW_LINE . $content . NEW_LINE . NEW_LINE . str_repeat('=', 120) . NEW_LINE;
-    }
-  }
-  else {
-    if (!headers_sent()) {
-      header(HTTP_HEADERS[$aHeader] ?? HTTP_HEADERS['text']);
-    }
-  }
-
-  // Write out the content
-  print($content);
-
-  // We're done here...
-  exit();
-}
-
-// --------------------------------------------------------------------------------------------------------------------
-
-function gfReportFailure(array $aMetadata) {
-  $traceline = fn($eFile, $eLine) => str_replace(ROOT_PATH, EMPTY_STRING, $eFile) . COLON . $eLine;
-  $generator = (!SAPI_IS_CLI && function_exists('gfContent')) ? true : false;
-  $functions = ['gfErrorHandler', 'gfExceptionHandler', 'trigger_error'];
-  $trace = ($aMetadata['file'] && $aMetadata['line']) ? [$traceline($aMetadata['file'], $aMetadata['line'])] : EMPTY_ARRAY;
-
-  foreach ($aMetadata['trace'] as $_key => $_value) {
-    if (in_array($_value['function'], $functions)) {
-      continue;
-    }
-
-    $trace[] = $traceline($_value['file'], $_value['line']);
+  /******************************************************************************************************************
+  * Static Class Public Init/Deinit
+  ******************************************************************************************************************/
+  public static function init() {
+    set_error_handler(__CLASS__ . SCOPE . "phpErrorHandler");
+    set_exception_handler(__CLASS__ . SCOPE . "phpExceptionHandler");
   }
 
-  $title = PHP_ERROR_CODES[$aMetadata['code']] ?? PHP_ERROR_CODES[E_ALL];
-  $content = $aMetadata['message'];
+  public static function uninit() { restore_error_handler(); restore_exception_handler(); }
 
-  if ($generator) {
-    $content = is_string($content) ?
-               '<h2 style="display: block; border-bottom: 1px solid #d6e5f5; font-weight: bold;">Issue Details</h2>' .
-               '<p>' . $content . '</p>':
-               EMPTY_STRING;
+  /**********************************************************************************************************************
+  * Sends HTTP Headers to client using a short name
+  *
+  * @dep HTTP_HEADERS
+  * @dep DEBUG_MODE
+  * @dep gfError()
+  * @param $aHeader    Short name of header
+  **********************************************************************************************************************/
+  public static function header($aHeader, $aReplace = true) { 
+    $debugMode = gfGetProperty('runtime', 'debugMode', DEBUG_MODE);
+    $isErrorPage = in_array($aHeader, [404, 501]);
 
-    $content .= '<h3>Traceback:</h3><ul>';
-
-    foreach ($trace as $_value) {
-      $content .= '<li>' . $_value . '</li>';
+    if (!array_key_exists($aHeader, self::HTTP_HEADERS)) {
+      gfError('Unknown' . SPACE . $aHeader . SPACE . 'header');
     }
 
-    $content .= '</ul><hr><p><em>Please contact a system administrator.</em></p>';
+    if ($debugMode && $isErrorPage) {
+      gfError(self::HTTP_HEADERS[$aHeader]);
+    }
 
-    $commandBar = ['onclick="history.back()"' => 'Go Back'];
+    if (!headers_sent()) { 
+      header(self::HTTP_HEADERS[$aHeader], $aReplace);
 
-    if (gfGetProperty('runtime', 'qComponent') == 'special' || !array_key_exists('site', COMPONENTS ?? [])) {
-      $commandBar['/special/'] = 'Special Component';
+      if ($isErrorPage) {
+        exit();
+      }
+    }
+  }
+
+  /**********************************************************************************************************************
+  * Sends HTTP Header to redirect the client to another URL
+  *
+  * @param $aURL   URL to redirect to
+  **********************************************************************************************************************/
+  public static function redirect($aURL) { header('Location: ' . $aURL, true, 302); exit(); }
+
+  /**********************************************************************************************************************
+  * Get a subdomain or base domain from a host
+  *
+  * @dep DOT
+  * @dep gfSplitString()
+  * @param $aHost       Hostname
+  * @param $aReturnSub  Should return subdmain
+  * @returns            domain or subdomain
+  ***********************************************************************************************************************/
+  public static function getDomain(string $aHost, ?bool $aReturnSub = null) {
+    $host = gfSplitString(DOT, $aHost);
+    return implode(DOT, $aReturnSub ? array_slice($host, 0, -2) : array_slice($host, -2, 2));
+  }
+
+  /******************************************************************************************************************
+  * Simply prints output and sends header if not cli and exits
+  ******************************************************************************************************************/
+  public static function output($aContent, $aHeader = null) {
+    $content = null;
+
+    if (is_array($aContent)) {
+      $title = $aContent['title'] ?? 'Output';
+      $content = $aContent['content'] ?? EMPTY_STRING;
+
+      if ($title == 'Output' && $content == EMPTY_STRING) {
+        $content = $aContent ?? $content;
+      }
     }
     else {
-      $commandBar['/'] = DEFAULT_HOME_TEXT;
+      $title = 'Output';
+      $content = $aContent ?? EMPTY_STRING;
     }
 
-    gfSetProperty('runtime', 'commandBar', $commandBar);
+    $content = (is_string($content) || is_int($content)) ? $content : json_encode($content, JSON_FLAGS['display']);
 
-    unset($GLOBALS['gaRuntime']['sectionName']);
-    gfContent($content, ['title' => $title]);
+    // Send the header if not cli
+    if (SAPI_IS_CLI) {
+      if (!CLI_NO_LOGO) {
+        $software = $title . DASH_SEPARATOR . SOFTWARE_VENDOR . SPACE . SOFTWARE_NAME . SPACE . SOFTWARE_VERSION;
+        $titleLength = 120 - 8 - strlen($software);
+        $titleLength = ($titleLength > 0) ? $titleLength : 2;
+        $title = NEW_LINE . '==' . SPACE . PIPE . SPACE . $software . SPACE . PIPE . SPACE . str_repeat('=', $titleLength);
+        $content = $title . NEW_LINE . NEW_LINE . $content . NEW_LINE . NEW_LINE . str_repeat('=', 120) . NEW_LINE;
+      }
+    }
+    else {
+      if (!headers_sent()) {
+        self::header($aHeader ?? 'text');
+      }
+    }
+
+    // Write out the content
+    print($content);
+
+    // We're done here...
+    exit();
   }
 
-  gfOutput(['title'=> $title, 'content' => ['errorMessage' => $content, 'traceback' => $trace]]);
-}
+  /******************************************************************************************************************
+  * Output details about a failure condition
+  ******************************************************************************************************************/
+  public static function reportFailure(array $aMetadata) {
+    $traceline = fn($eFile, $eLine) => str_replace(ROOT_PATH, EMPTY_STRING, $eFile) . COLON . $eLine;
+    $generator = (!SAPI_IS_CLI && function_exists('gfContent')) ? true : false;
+    $functions = ['phpErrorHandler', 'phpExceptionHandler', 'trigger_error'];
+    $trace = ($aMetadata['file'] && $aMetadata['line']) ? [$traceline($aMetadata['file'], $aMetadata['line'])] : EMPTY_ARRAY;
 
-// --------------------------------------------------------------------------------------------------------------------
+    foreach ($aMetadata['trace'] as $_key => $_value) {
+      if (in_array($_value['function'], $functions)) {
+        continue;
+      }
 
-function gfErrorHandler($eCode, $eMessage, $eFile, $eLine) {
-  if (!(error_reporting() & $eCode)) {
-    // Don't do jack shit because the developers of PHP think users shouldn't be trusted.
-    return;
+      $trace[] = $traceline($_value['file'], $_value['line']);
+    }
+
+    $title = self::PHP_ERROR_CODES[$aMetadata['code']] ?? self::PHP_ERROR_CODES[E_ALL];
+    $content = $aMetadata['message'];
+
+    if ($generator) {
+      $content = is_string($content) ?
+                 '<h2 style="display: block; border-bottom: 1px solid #d6e5f5; font-weight: bold;">Issue Details</h2>' .
+                 '<p>' . $content . '</p>':
+                 EMPTY_STRING;
+
+      $content .= '<h3>Traceback:</h3><ul>';
+
+      foreach ($trace as $_value) {
+        $content .= '<li>' . $_value . '</li>';
+      }
+
+      $content .= '</ul><hr><p><em>Please contact a system administrator.</em></p>';
+
+      $commandBar = ['onclick="history.back()"' => 'Go Back'];
+
+      if (gfGetProperty('runtime', 'qComponent') == 'special' || !array_key_exists('site', COMPONENTS ?? [])) {
+        $commandBar['/special/'] = 'Special Component';
+      }
+      else {
+        $commandBar['/'] = DEFAULT_HOME_TEXT;
+      }
+
+      gfSetProperty('runtime', 'commandBar', $commandBar);
+
+      unset($GLOBALS['gaRuntime']['sectionName']);
+      gfContent($content, ['title' => $title]);
+    }
+
+    gfOutput(['title'=> $title, 'content' => ['errorMessage' => $content, 'traceback' => $trace]]);
   }
 
-  gfReportFailure(['code' => $eCode, 'message' => $eMessage, 'file' => $eFile,
-                   'line' => $eLine, 'trace' => debug_backtrace(2)]);
+  /******************************************************************************************************************
+  * PHP Handlers
+  ******************************************************************************************************************/
+  public static function phpErrorHandler($eCode, $eMessage, $eFile, $eLine) {
+    if (!(error_reporting() & $eCode)) {
+      // Don't do jack shit because the developers of PHP think users shouldn't be trusted.
+      return;
+    }
+
+    self::reportFailure(['code' => $eCode, 'message' => $eMessage,
+                         'file' => $eFile, 'line' => $eLine,
+                         'trace' => debug_backtrace(2)]);
+  }
+
+  // ----------------------------------------------------------------------------------------------------------------
+
+  public static function phpExceptionHandler($ex) {
+    self::reportFailure(['code' => E_EXCEPTION, 'message' => $ex->getMessage(),
+                         'file' => $ex->getFile(), 'line' => $ex->getLine(),
+                         'trace' => $ex->getTrace()]);
+  }
 }
 
-set_error_handler("gfErrorHandler");
+/**********************************************************************************************************************
+* Global Functions -> Static Class Methods
+***********************************************************************************************************************/
+function gfOutput(...$args) { return binocConsoleUtils::output(...$args); }
+function gfHeader(...$args) { return binocConsoleUtils::header(...$args); }
+function gfRedirect(...$args) { return binocConsoleUtils::redirect(...$args); }
 
-// --------------------------------------------------------------------------------------------------------------------
-
-function gfExceptionHandler($ex) {
-  gfReportFailure(['code' => E_EXCEPTION, 'message' => $ex->getMessage(), 'file' => $ex->getFile(),
-                   'line' => $ex->getLine(), 'trace' => $ex->getTrace()]);
-}
-
-set_exception_handler("gfExceptionHandler");
-
-// --------------------------------------------------------------------------------------------------------------------
-
+/**********************************************************************************************************************
+* General Error Function
+*
+* @param $aMessage   Error message
+**********************************************************************************************************************/
 function gfError($aMessage) {
-  gfReportFailure(['code' => E_ALL, 'message' => $aMessage, 'file' => null, 'line' => null,
-                   'trace' => debug_backtrace(2)]);
+  binocConsoleUtils::reportFailure(['code' => E_ALL, 'message' => $aMessage,
+                                    'file' => null, 'line' => null,
+                                    'trace' => debug_backtrace(2)]);
 }
+
+/**********************************************************************************************************************
+* Send 404 header or display an error message
+*
+* @param $aMessage   Error message if debug
+***********************************************************************************************************************/
+function gfSend404($aMessage) {
+  if (gfGetProperty('runtime', 'debugMode', DEBUG_MODE)) {
+    binocConsoleUtils::reportFailure(['code' => E_ALL, 'message' => $aMessage,
+                                      'file' => null, 'line' => null,
+                                      'trace' => debug_backtrace(2)]);
+  }
+
+  binocConsoleUtils::header(404);
+}
+
+/**********************************************************************************************************************
+* Init the console utils
+***********************************************************************************************************************/
+const E_EXCEPTION = 65536;
+binocConsoleUtils::init();
 
 // ====================================================================================================================
 
@@ -416,61 +511,6 @@ function gfSetProperty(string $aNode, string|int $aKey, $aValue = null) {
 }
 
 /**********************************************************************************************************************
-* Sends HTTP Headers to client using a short name
-*
-* @dep HTTP_HEADERS
-* @dep DEBUG_MODE
-* @dep gfError()
-* @param $aHeader    Short name of header
-**********************************************************************************************************************/
-function gfHeader($aHeader, $aReplace = true) { 
-  $debugMode = gfGetProperty('runtime', 'debugMode', DEBUG_MODE);
-  $isErrorPage = in_array($aHeader, [404, 501]);
-
-  if (!array_key_exists($aHeader, HTTP_HEADERS)) {
-    gfError('Unknown' . SPACE . $aHeader . SPACE . 'header');
-  }
-
-  if ($debugMode && $isErrorPage) {
-    gfError(HTTP_HEADERS[$aHeader]);
-  }
-
-  if (!headers_sent()) { 
-    header(HTTP_HEADERS[$aHeader], $aReplace);
-
-    if ($isErrorPage) {
-      exit();
-    }
-  }
-}
-
-/**********************************************************************************************************************
-* 404 or Error
-*
-* @param $aErrorMessage   Error message if debug
-***********************************************************************************************************************/
-function gfErrorOr404($aErrorMessage) {
-  if (gfGetProperty('runtime', 'debugMode', DEBUG_MODE)) {
-    gfError($aErrorMessage);
-  }
-
-  gfHeader(404);
-}
-
-/**********************************************************************************************************************
-* Sends HTTP Header to redirect the client to another URL
-*
-* @param $aURL   URL to redirect to
-**********************************************************************************************************************/
-// This function sends a redirect header
-function gfRedirect($aURL) {
-  header('Location: ' . $aURL, true, 302);
-  
-  // We are done here
-  exit();
-}
-
-/**********************************************************************************************************************
 * Basic Filter Substitution of a string
 *
 * @dep EMPTY_STRING
@@ -502,10 +542,11 @@ function gfSubst(string $aString, array $aSubsts, bool $aRegEx = false) {
 * @param $aString      String to be exploded
 * @returns             Array of string parts
 ***********************************************************************************************************************/
-function gfSplitString(string $aSeparator, string $aString) {
+function gfSplitStr(string $aSeparator, string $aString) {
   return (!str_contains($aString, $aSeparator)) ? [$aString] :
           array_values(array_filter(explode($aSeparator, $aString), 'strlen'));
 }
+function gfSplitString(...$args) { return gfSplitStr(...$args); }
 
 /**********************************************************************************************************************
 * Splits a path into an indexed array of parts
@@ -560,20 +601,6 @@ function gfBuildPath(...$aPathParts) {
 ***********************************************************************************************************************/
 function gfStripSubstr(string $aStr, ?string $aStripStr = null) {
   return str_replace($aStripStr ?? ROOT_PATH, EMPTY_STRING, $aStr);
-}
-
-/**********************************************************************************************************************
-* Get a subdomain or base domain from a host
-*
-* @dep DOT
-* @dep gfSplitString()
-* @param $aHost       Hostname
-* @param $aReturnSub  Should return subdmain
-* @returns            domain or subdomain
-***********************************************************************************************************************/
-function gfGetDomain(string $aHost, ?bool $aReturnSub = null) {
-  $host = gfSplitString(DOT, $aHost);
-  return implode(DOT, $aReturnSub ? array_slice($host, 0, -2) : array_slice($host, -2, 2));
 }
 
 /**********************************************************************************************************************
