@@ -301,8 +301,6 @@ class binocConsoleUtils {
         $content .= '<li>' . $_value . '</li>';
       }
 
-      $content .= '</ul><hr><p><em>Please contact a system administrator.</em></p>';
-
       $commandBar = ['onclick="history.back()"' => 'Go Back'];
 
       if (gfGetProperty('runtime', 'qComponent') == 'special' || !array_key_exists('site', COMPONENTS ?? [])) {
@@ -315,7 +313,7 @@ class binocConsoleUtils {
       gfSetProperty('runtime', 'commandBar', $commandBar);
 
       unset($GLOBALS['gaRuntime']['sectionName']);
-      gfContent($content, ['title' => $title]);
+      gfContent($content, ['title' => $title, 'statustext' => 'Please contact a system administrator.']);
     }
 
     gfOutput(['title'=> $title, 'content' => ['errorMessage' => $content, 'traceback' => $trace]]);

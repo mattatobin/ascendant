@@ -67,7 +67,12 @@ function gfContent($aContent, array $aMetadata = EMPTY_ARRAY) {
     gfOutput(['content' => $aContent, 'title' => $aMetadata['title'] ?? 'Output']);
   }
 
-  $metadata = fn($aMetaItem) => $aMetadata[$aMetaItem] ?? null;
+  $content = $aContent;
+
+  $metadata = function($val) use(&$aMetadata) {
+    return $aMetadata[$val] ?? null;
+  };
+
   $menuize = function($aMenu) {
     $rv = EMPTY_STRING;
 
@@ -83,9 +88,7 @@ function gfContent($aContent, array $aMetadata = EMPTY_ARRAY) {
     return $rv;
   };
 
-  if (!$metadata('textbox') && (is_string($aContent) || is_int($aContent))) {
-    $content = $aContent;
-
+  if ((is_string($content) || is_int($content)) && !$metadata('textbox')) {
     if (!str_starts_with($content, '<p') && !str_starts_with($content, '<ul') &&
         !str_starts_with($content, '<h1') && !str_starts_with($content, '<h2') &&
         !str_starts_with($content, '<table')) {
@@ -93,8 +96,12 @@ function gfContent($aContent, array $aMetadata = EMPTY_ARRAY) {
     }
   }
   else {
-    $content = '<form><textarea class="special-textbox" name="content" rows="30" readonly>' .
-               ($metadata('textbox') ? $aContent : json_encode($aContent, JSON_FLAGS['display'])) . '</textarea></form>';
+    $aMetadata['textbox'] = true;
+  }
+
+  if ($metadata('textbox')) {
+    $content = (is_string($content) || is_int($content)) ? $content : json_encode($content, JSON_FLAGS['display']);
+    $content = '<form><textarea class="special-textbox" name="content" rows="30" readonly>' . $content . '</textarea></form>';
   }
 
   $template = gfReadFile(gfBuildPath(PATHS['skin'], DEFAULT_SKIN, 'template' . FILE_EXTS['xhtml'])); 
@@ -120,7 +127,7 @@ function gfContent($aContent, array $aMetadata = EMPTY_ARRAY) {
     '{$SITE_SECTION}'     => $sectionName ?? EMPTY_STRING,
     '{$PAGE_TITLE}'       => $isTestCase ? '[Test]' . SPACE . gfGetProperty('runtime', 'qTestCase') : ($metadata('title') ?? 'Output'),
     '{$PAGE_CONTENT}'     => $content,
-    '{$PAGE_STATUS}'      => $metadata('status') ?? gfGetProperty('server', 'REQUEST_URI', SLASH) ?? 'Done',
+    '{$PAGE_STATUS}'      => $metadata('statustext') ?? gfGetProperty('server', 'REQUEST_URI', SLASH) ?? 'Done',
     '{$SOFTWARE_VENDOR}'  => SOFTWARE_VENDOR,
     '{$SOFTWARE_NAME}'    => SOFTWARE_NAME,
     '{$SOFTWARE_VERSION}' => SOFTWARE_VERSION,
