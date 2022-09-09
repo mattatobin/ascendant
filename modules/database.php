@@ -14,10 +14,10 @@ class moduleDatabase {
     $this->connection = mysqli_connect('localhost', $aUsername, $aPassword, $aDatabase);
 
     if (mysqli_connect_errno()) {
-      gfError('SQL Connection Error: ' . mysqli_connect_errno($this->connection));
+      gError('SQL Connection Error: ' . mysqli_connect_errno($this->connection));
     }
 
-    gfSetProperty('runtime', 'currentDatabase', $aDatabase);
+    gSetProperty('runtime', 'currentDatabase', $aDatabase);
     mysqli_set_charset($this->connection, 'utf8');
     require_once(LIBRARIES['safeMySQL']);
     $this->safeMySQL = new SafeMysql(['mysqli' => $this->connection]);
@@ -30,7 +30,7 @@ class moduleDatabase {
     if ($this->connection) {
       $this->safeMySQL = null;
       mysqli_close($this->connection);
-      gfSetProperty('runtime', 'currentDatabase', false);
+      gSetProperty('runtime', 'currentDatabase', false);
     }
   }
 
@@ -41,27 +41,27 @@ class moduleDatabase {
     $dbChange = mysqli_select_db($this->connection, $aDatabase);
 
     if ($dbChange) {
-      gfSetProperty('runtime', 'currentDatabase', $this->safeMySQL->getCol("SELECT DATABASE()")[0]);
+      gSetProperty('runtime', 'currentDatabase', $this->safeMySQL->getCol("SELECT DATABASE()")[0]);
       return $dbChange;
     }
 
-    gfError('Failed to change database to' . SPACE . $aDatabase);
+    gError('Failed to change database to' . SPACE . $aDatabase);
   }
 
   /********************************************************************************************************************
   * SafeMySQL Method Wrappers
   ********************************************************************************************************************/
-  public function parse(...$aArgs) { return gfGetProperty('value', $this->safeMySQL->parse(...$aArgs)); }
-  public function query(...$aArgs) { return gfGetProperty('value', $this->safeMySQL->query(...$aArgs)); }
-  public function col(...$aArgs) { return gfGetProperty('value', $this->safeMySQL->getCol(...$aArgs)); }
-  public function row(...$aArgs) { return gfGetProperty('value', $this->safeMySQL->getRow(...$aArgs)); }
-  public function all(...$aArgs) { return gfGetProperty('value', $this->safeMySQL->getAll(...$aArgs)); }
+  public function parse(...$aArgs) { return gGetProperty('value', $this->safeMySQL->parse(...$aArgs)); }
+  public function query(...$aArgs) { return gGetProperty('value', $this->safeMySQL->query(...$aArgs)); }
+  public function col(...$aArgs) { return gGetProperty('value', $this->safeMySQL->getCol(...$aArgs)); }
+  public function row(...$aArgs) { return gGetProperty('value', $this->safeMySQL->getRow(...$aArgs)); }
+  public function all(...$aArgs) { return gGetProperty('value', $this->safeMySQL->getAll(...$aArgs)); }
 
   /********************************************************************************************************************
   * MySQLi Raw Query Wrappers
   ********************************************************************************************************************/
-  public function raw($aQuery) { return gfGetProperty('value', mysqli_query($this->connection, $aQuery)); }
-  public function multi($aQuery) { return gfGetProperty('value', mysqli_multi_query($this->connection, $aQuery)); }
+  public function raw($aQuery) { return gGetProperty('value', mysqli_query($this->connection, $aQuery)); }
+  public function multi($aQuery) { return gGetProperty('value', mysqli_multi_query($this->connection, $aQuery)); }
 }
 
 ?>
