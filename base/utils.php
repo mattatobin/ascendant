@@ -1,5 +1,26 @@
 <?php
 
+/*
+  Portions of this file are licensed under the following licenses:
+
+  The MIT License (MIT)
+
+  Copyright (c) Taylor Otwell
+
+  Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated
+  documentation files (the "Software"), to deal in the Software without restriction, including without limitation the
+  rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit
+  persons to whom the Software is furnished to do so, subject to the following conditions:
+
+  The above copyright notice and this permission notice shall be included in all copies or substantial portions
+  of the Software.
+
+  THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE
+  WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR
+  COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR
+  OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+*/
+
 // == | Setup | ======================================================================================================
 
 // We like CLI
@@ -127,9 +148,9 @@ const JSON_ENCODE_FLAGS     = JSON_FLAGS['display'];
 
 // ====================================================================================================================
 
-// == | Output and Error Handling | ===================================================================================
+// == | Static Classes | ==============================================================================================
 
-class binocConsoleUtils {
+class binocOutputUtils {
   const HTTP_HEADERS = array(
     404                       => 'HTTP/1.1 404 Not Found',
     501                       => 'HTTP/1.1 501 Not Implemented',
@@ -180,19 +201,19 @@ class binocConsoleUtils {
   *
   * @dep HTTP_HEADERS
   * @dep DEBUG_MODE
-  * @dep gfError()
+  * @dep gError()
   * @param $aHeader    Short name of header
   **********************************************************************************************************************/
   public static function header($aHeader, $aReplace = true) { 
-    $debugMode = gfGetProperty('runtime', 'debugMode', DEBUG_MODE);
+    $debugMode = gGetProperty('runtime', 'debugMode', DEBUG_MODE);
     $isErrorPage = in_array($aHeader, [404, 501]);
 
     if (!array_key_exists($aHeader, self::HTTP_HEADERS)) {
-      gfError('Unknown' . SPACE . $aHeader . SPACE . 'header');
+      gError('Unknown' . SPACE . $aHeader . SPACE . 'header');
     }
 
     if ($debugMode && $isErrorPage) {
-      gfError(self::HTTP_HEADERS[$aHeader]);
+      gError(self::HTTP_HEADERS[$aHeader]);
     }
 
     if (!headers_sent()) { 
@@ -215,20 +236,20 @@ class binocConsoleUtils {
   * Get a subdomain or base domain from a host
   *
   * @dep DOT
-  * @dep gfSplitString()
+  * @dep gSplitString()
   * @param $aHost       Hostname
   * @param $aReturnSub  Should return subdmain
   * @returns            domain or subdomain
   ***********************************************************************************************************************/
   public static function getDomain(string $aHost, ?bool $aReturnSub = null) {
-    $host = gfSplitString(DOT, $aHost);
+    $host = gSplitString(DOT, $aHost);
     return implode(DOT, $aReturnSub ? array_slice($host, 0, -2) : array_slice($host, -2, 2));
   }
 
   /******************************************************************************************************************
   * Simply prints output and sends header if not cli and exits
   ******************************************************************************************************************/
-  public static function output($aContent, $aHeader = null) {
+  public static function display($aContent, $aHeader = null) {
     $content = null;
 
     if (is_array($aContent)) {
@@ -274,7 +295,7 @@ class binocConsoleUtils {
   ******************************************************************************************************************/
   public static function reportFailure(array $aMetadata) {
     $traceline = fn($eFile, $eLine) => str_replace(ROOT_PATH, EMPTY_STRING, $eFile) . COLON . $eLine;
-    $generator = (!SAPI_IS_CLI && function_exists('gfContent')) ? true : false;
+    $generator = (!SAPI_IS_CLI && function_exists('gContent')) ? true : false;
     $functions = ['phpErrorHandler', 'phpExceptionHandler', 'trigger_error'];
     $trace = ($aMetadata['file'] && $aMetadata['line']) ? [$traceline($aMetadata['file'], $aMetadata['line'])] : EMPTY_ARRAY;
 
@@ -303,20 +324,20 @@ class binocConsoleUtils {
 
       $commandBar = ['onclick="history.back()"' => 'Go Back'];
 
-      if (gfGetProperty('runtime', 'qComponent') == 'special' || !array_key_exists('site', COMPONENTS ?? [])) {
+      if (gGetProperty('runtime', 'qComponent') == 'special' || !array_key_exists('site', COMPONENTS ?? [])) {
         $commandBar['/special/'] = 'Special Component';
       }
       else {
         $commandBar['/'] = DEFAULT_HOME_TEXT;
       }
 
-      gfSetProperty('runtime', 'commandBar', $commandBar);
+      gSetProperty('runtime', 'commandBar', $commandBar);
 
       unset($GLOBALS['gaRuntime']['sectionName']);
-      gfContent($content, ['title' => $title, 'statustext' => 'Please contact a system administrator.']);
+      gContent($content, ['title' => $title, 'statustext' => 'Please contact a system administrator.']);
     }
 
-    gfOutput(['title'=> $title, 'content' => ['errorMessage' => $content, 'traceback' => $trace]]);
+    gOutput(['title'=> $title, 'content' => ['errorMessage' => $content, 'traceback' => $trace]]);
   }
 
   /******************************************************************************************************************
@@ -333,8 +354,6 @@ class binocConsoleUtils {
                          'trace' => debug_backtrace(2)]);
   }
 
-  // ----------------------------------------------------------------------------------------------------------------
-
   public static function phpExceptionHandler($ex) {
     self::reportFailure(['code' => E_EXCEPTION, 'message' => $ex->getMessage(),
                          'file' => $ex->getFile(), 'line' => $ex->getLine(),
@@ -342,22 +361,328 @@ class binocConsoleUtils {
   }
 }
 
-/**********************************************************************************************************************
-* Global Functions -> Static Class Methods
-***********************************************************************************************************************/
-function gfOutput(...$args) { return binocConsoleUtils::output(...$args); }
-function gfHeader(...$args) { return binocConsoleUtils::header(...$args); }
-function gfRedirect(...$args) { return binocConsoleUtils::redirect(...$args); }
+// --------------------------------------------------------------------------------------------------------------------
+
+class binocRegUtils {
+  private static $init = false;
+  private static $registry = EMPTY_ARRAY;
+  private static $remap = ['static', 'general', 'request'];
+
+  /********************************************************************************************************************
+  * Init the static class
+  ********************************************************************************************************************/
+  public static function init() {
+    if (self::$init) {
+      return;
+    }
+
+    $domain = function($aHost, $aReturnSub = false) {
+      $host = gSplitString(DOT, $aHost);
+      return implode(DOT, $aReturnSub ? array_slice($host, 0, -2) : array_slice($host, -2, 2));
+    };
+
+    $path = gSplitPath(self::superGlobal('get', 'path', SLASH));
+    self::$registry = array(
+      'app' => array(
+        'component'   => self::superGlobal('get', 'component', 'site'),
+        'path'        => $path,
+        'depth'       => count($path ?? EMPTY_ARRAY),
+        'debug'       => null,
+      ),
+      'network' => array(
+        'scheme'      => self::superGlobal('server', 'SCHEME') ?? (self::superGlobal('server', 'HTTPS') ? 'https' : 'http'),
+        'domain'      => $domain(self::superGlobal('server', 'SERVER_NAME', 'localhost')),
+        'subdomain'   => $domain(self::superGlobal('server', 'SERVER_NAME', 'localhost'), true),
+        'remoteAddr'  => self::superGlobal('server', 'HTTP_X_FORWARDED_FOR', self::superGlobal('server', 'REMOTE_ADDR', '127.0.0.1')),
+        'userAgent'   => self::superGlobal('server', 'HTTP_USER_AGENT', 'php' . DASH . PHP_SAPI . SLASH . PHP_VERSION),
+      ),
+    );
+
+    self::$init = true;
+  }
+
+  /********************************************************************************************************************
+  * Get the registry property and return it
+  ********************************************************************************************************************/
+  public static function getRegistryStore() {
+    return self::$registry;
+  }
+
+  /********************************************************************************************************************
+  * Get the value of a dotted key from the registry property except for virtual regnodes
+  ********************************************************************************************************************/
+  public static function getRegistryKey(string $aKey, $aDefault = null) {
+    if ($aKey == EMPTY_STRING) {
+      return null;
+    }
+
+    $keys = gSplitStr(DOT, $aKey);
+
+    if (in_array($keys[0] ?? EMPTY_STRING, self::$remap)) {
+      switch ($keys[0] ?? EMPTY_STRING) {
+        case 'static':
+          if (count($keys) < 2) {
+            return null;
+          }
+
+          $ucConst = strtoupper($keys[1]);
+          $prefixConst = 'k' . ucfirst($keys[1]);
+
+          switch (true) {
+            case defined($ucConst):
+              $rv = constant($ucConst);
+              break;
+            case defined($prefixConst):
+              $rv = constant($prefixConst);
+              break;
+            case defined($keys[1]):
+              $rv = constant($keys[1]);
+              break;
+            default:
+              return null;
+          }
+
+          if (!self::accessible($rv)) {
+            return $rv ?? $aDefault;
+          }
+
+          unset($keys[0], $keys[1]);
+          $rv = self::getArrValue($rv, self::superGlobal('check', implode(DOT, $keys)), $aDefault);
+          break;
+        case 'request':
+          if (count($keys) < 3) {
+            return null;
+          }
+
+          $rv = self::superGlobal($keys[1], $keys[2]);
+
+          if (!self::accessible($rv)) {
+            return $rv ?? $aDefault;
+          }
+
+          unset($keys[0], $keys[1]);
+          $rv = self::getArrValue($rv, self::superGlobal('check', implode(DOT, $keys)), $aDefault);
+          break;
+        default:
+          if (count($keys) < 2 || str_starts_with($keys[1], UNDERSCORE)) {
+            return null;
+          }
+
+          unset($keys[0]);
+          $rv = self::getArrValue($GLOBALS, self::superGlobal('check', implode(DOT, $keys)), $aDefault);
+      }
+    }
+    else {
+      $rv = self::getArrValue(self::$registry, $aKey, $aDefault);
+    }
+      
+    return $rv;
+  }
+
+  /********************************************************************************************************************
+  * Set the value of a dotted key from the registry property
+  ********************************************************************************************************************/
+  public static function setRegistryKey($aKey, $aValue) {
+    if (in_array(gSplitStr(DOT, $aKey)[0] ?? EMPTY_STRING, self::$remap)) {
+      gError('Setting values on remapped nodes is not supported.');
+    }
+
+    return self::setArrValue(self::$registry, $aKey, $aValue);
+  }
+
+  public static function superGlobal($aNode, $aKey, $aDefault = null) {
+    $rv = null;
+
+    // Turn the variable type into all caps prefixed with an underscore
+    $aNode = UNDERSCORE . strtoupper($aNode);
+
+    // This handles the superglobals
+    switch($aNode) {
+      case '_CHECK':
+        $rv = (empty($aKey) || $aKey === 'none' || $aKey === 0) ? null : $aKey;
+        break;
+      case '_GET':
+        if (SAPI_IS_CLI && $GLOBALS['argc'] > 1) {
+          $args = [];
+
+          foreach (array_slice($GLOBALS['argv'], 1) as $_value) {
+            $arg = @explode('=', $_value);
+
+            if (count($arg) < 2) {
+              continue;
+            }
+
+            $attr = str_replace('--', EMPTY_STRING, $arg[0]);
+            $val = self::__METHOD__('check', str_replace('"', EMPTY_STRING, $arg[1]));
+
+            if (!$attr && !$val) {
+              continue;
+            }
+
+            $args[$attr] = $val;
+          }
+
+          $rv = $args[$aKey] ?? $aDefault;
+          break;
+        }
+      case '_SERVER':
+      case '_ENV':
+      case '_FILES':
+      case '_POST':
+      case '_COOKIE':
+      case '_SESSION':
+        $rv = $GLOBALS[$aNode][$aKey] ?? $aDefault;
+        break;
+      default:
+        // We don't know WHAT was requested but it is obviously wrong...
+        gError('Unknown system node.');
+    }
+    
+    // We always pass $_GET values through a general regular expression
+    // This allows only a-z A-Z 0-9 - / { } @ % whitespace and ,
+    if ($rv && $aNode == "_GET") {
+      $rv = preg_replace(REGEX_GET_FILTER, EMPTY_STRING, $rv);
+    }
+
+    // Files need special handling.. In principle we hard fail if it is anything other than
+    // OK or NO FILE
+    if ($rv && $aNode == "_FILES") {
+      if (!in_array($rv['error'], [UPLOAD_ERR_OK, UPLOAD_ERR_NO_FILE])) {
+        gError('Upload of ' . $aKey . ' failed with error code: ' . $rv['error']);
+      }
+
+      // No file is handled as merely being null
+      if ($rv['error'] == UPLOAD_ERR_NO_FILE) {
+        return null;
+      }
+
+      // Cursory check the actual mime-type and replace whatever the web client sent
+      $rv['type'] = mime_content_type($rv['tmp_name']);
+    }
+    
+    return $rv;
+  }
+
+  /********************************************************************************************************************
+  * Get the value of a dotted key from $aArr
+  ********************************************************************************************************************/
+  public static function getArrValue($aArr, ?string $aKey, $aDefault = null) {
+    $maybeObject2Array = function($val) {
+      if (is_object($val)) {
+        return self::superGlobal('check', json_decode(json_encode($val), true));
+      }
+
+      return self::superGlobal('check', $val);
+    };
+
+    $maybeCallValue = function($val) {
+      return ($val instanceof Closure) ? $val() : $val;
+    };
+
+    $aArr = $maybeObject2Array($aArr);
+
+    if (is_null($aKey)) {
+      return $aArr ?? $maybeCallValue($aDefault);
+    }
+
+    if (!self::accessible($aArr)) {
+      return $maybeCallValue($aDefault);     
+    }
+
+    if (self::exists($aArr, $aKey)) {
+      return $maybeObject2Array($aArr[$aKey]);
+    }
+
+    if (str_contains(DOT, $aKey)) {
+      return $maybeObject2Array($aArr[is_numeric($aKey) ? (int)$aKey : $aKey] ?? $maybeCallValue($aDefault));
+    }
+
+    foreach (explode(DOT, $aKey) as $_value) {
+      $_value = is_numeric($_value) ? (int)$_value : $_value;
+      $aArr = $maybeObject2Array($aArr);
+
+      if (self::accessible($aArr) && self::exists($aArr, $_value)) {
+        $aArr = $aArr[$_value];
+        continue;
+      }
+
+      return $maybeCallValue($aDefault);
+    }
+
+    return $maybeObject2Array($aArr);
+  }
+
+  /********************************************************************************************************************
+  * Set the value of a dotted key from $aArr
+  ********************************************************************************************************************/
+  public static function setArrValue(&$array, string $key, $value) {
+    $keys = explode('.', $key);
+
+    while (count($keys) > 1) {
+        $key = array_shift($keys);
+
+        // If key is a numeric make sure it becomes int
+        if (is_numeric($key)) {
+          $key = (int)$key;
+        }
+
+        // If the key doesn't exist at this depth, we will just create an empty array
+        // to hold the next value, allowing us to create the arrays to hold final
+        // values at the correct depth. Then we'll keep digging into the array.
+        if (! isset($array[$key]) || ! is_array($array[$key])) {
+            $array[$key] = [];
+        }
+
+        $array = &$array[$key];
+    }
+
+    $array[array_shift($keys)] = $value;
+
+    return $array;
+  }
+
+  private static function accessible($value) {
+    return is_array($value) || $value instanceof ArrayAccess;
+  }
+
+  private static function exists($array, $key) {
+    return ($array instanceof ArrayAccess) ? $array->offsetExists($key) : array_key_exists($key, $array);
+  }
+}
+
+// --------------------------------------------------------------------------------------------------------------------
+
+// Define E_EXCEPTION
+const E_EXCEPTION = 65536;
+
+// Global wrapper functions
+function gOutput(...$args) { return binocOutputUtils::display(...$args); }
+function gHeader(...$args) { return binocOutputUtils::header(...$args); }
+function gRedirect(...$args) { return binocOutputUtils::redirect(...$args); }
+
+function gGetRegKey(...$args) { return binocRegUtils::getRegistryKey(...$args); }
+function gSetRegKey(...$args) { return binocRegUtils::setRegistryKey(...$args); }
+function gGetArrVal(...$args) { return binocRegUtils::getArrValue(...$args); }
+function gSetArrVal(...$args) { return binocRegUtils::setArrValue(...$args); }
+function gSuperGlobal(...$args) { return binocRegUtils::superGlobal(...$args); }
+function gMaybeNull(...$args) { return binocRegUtils::superGlobal('check', ...$args); }
+
+// Init the static classes
+binocOutputUtils::init();
+binocRegUtils::init();
+
+// ====================================================================================================================
+
+// == | Global Functions | ============================================================================================
 
 /**********************************************************************************************************************
 * General Error Function
 *
 * @param $aMessage   Error message
 **********************************************************************************************************************/
-function gfError($aMessage) {
-  binocConsoleUtils::reportFailure(['code' => E_ALL, 'message' => $aMessage,
-                                    'file' => null, 'line' => null,
-                                    'trace' => debug_backtrace(2)]);
+function gError($aMessage) {
+  binocOutputUtils::reportFailure(['code' => E_ALL, 'message' => $aMessage, 'file' => null, 'line' => null,
+                                   'trace' => debug_backtrace(2)]);
 }
 
 /**********************************************************************************************************************
@@ -365,25 +690,14 @@ function gfError($aMessage) {
 *
 * @param $aMessage   Error message if debug
 ***********************************************************************************************************************/
-function gfSend404($aMessage) {
-  if (gfGetProperty('runtime', 'debugMode', DEBUG_MODE)) {
-    binocConsoleUtils::reportFailure(['code' => E_ALL, 'message' => $aMessage,
-                                      'file' => null, 'line' => null,
-                                      'trace' => debug_backtrace(2)]);
+function gSend404($aMessage) {
+  if (gGetProperty('runtime', 'debugMode', DEBUG_MODE)) {
+    binocOutputUtils::reportFailure(['code' => E_ALL, 'message' => $aMessage, 'file' => null, 'line' => null,
+                                     'trace' => debug_backtrace(2)]);
   }
 
-  binocConsoleUtils::header(404);
+  binocOutputUtils::header(404);
 }
-
-/**********************************************************************************************************************
-* Init the console utils
-***********************************************************************************************************************/
-const E_EXCEPTION = 65536;
-binocConsoleUtils::init();
-
-// ====================================================================================================================
-
-// == | Global Functions | ============================================================================================
 
 /**********************************************************************************************************************
 * Reads globalspace properties
@@ -392,9 +706,9 @@ binocConsoleUtils::init();
 * @dep UNDERSCORE
 * @dep EMPTY_STRING
 * @dep REGEX_GET_FILTER
-* @dep gfError()
+* @dep gError()
 **********************************************************************************************************************/
-function gfGetProperty($aNode, $aKey, $aDefault = null) {
+function gGetProperty($aNode, $aKey, $aDefault = null) {
   $rv = null;
 
   // Turn the variable type into all caps prefixed with an underscore
@@ -425,7 +739,7 @@ function gfGetProperty($aNode, $aKey, $aDefault = null) {
           }
 
           $attr = str_replace('--', EMPTY_STRING, $arg[0]);
-          $val = gfGetProperty('value', str_replace('"', EMPTY_STRING, $arg[1]));
+          $val = gGetProperty('value', str_replace('"', EMPTY_STRING, $arg[1]));
 
           if (!$attr && !$val) {
             continue;
@@ -447,7 +761,7 @@ function gfGetProperty($aNode, $aKey, $aDefault = null) {
       break;
     default:
       // We don't know WHAT was requested but it is obviously wrong...
-      gfError('Unknown global node.');
+      gError('Unknown global node.');
   }
   
   // We always pass $_GET values through a general regular expression
@@ -460,7 +774,7 @@ function gfGetProperty($aNode, $aKey, $aDefault = null) {
   // OK or NO FILE
   if ($rv && $aNode == "_FILES") {
     if (!in_array($rv['error'], [UPLOAD_ERR_OK, UPLOAD_ERR_NO_FILE])) {
-      gfError('Upload of ' . $aKey . ' failed with error code: ' . $rv['error']);
+      gError('Upload of ' . $aKey . ' failed with error code: ' . $rv['error']);
     }
 
     // No file is handled as merely being null
@@ -479,9 +793,9 @@ function gfGetProperty($aNode, $aKey, $aDefault = null) {
 * Sets globalspace properties
 *
 * @dep UNDERSCORE
-* @dep gfError()
+* @dep gError()
 **********************************************************************************************************************/
-function gfSetProperty(string $aNode, string|int $aKey, $aValue = null) {
+function gSetProperty(string $aNode, string|int $aKey, $aValue = null) {
   $aNode = UNDERSCORE . strtoupper($aNode);
 
   if ($aNode == '_RUNTIME') {
@@ -489,19 +803,19 @@ function gfSetProperty(string $aNode, string|int $aKey, $aValue = null) {
       unset($GLOBALS['gaRuntime'][$aKey]);
     }
     else {
-      $GLOBALS['gaRuntime'][$aKey] = gfGetProperty('check', $aValue);
+      $GLOBALS['gaRuntime'][$aKey] = gGetProperty('check', $aValue);
     }
   }
   else {
     if ($aKey == 'gaRuntime') {
-      gfError('Unable to set $gaRuntime using the global node');
+      gError('Unable to set $gaRuntime using the global node');
     }
 
     if ($aValue === null) {
       unset($GLOBALS[$aKey]);
     }
     else {
-      $GLOBALS[$aKey] = gfGetProperty('check', $aValue);
+      $GLOBALS[$aKey] = gGetProperty('check', $aValue);
     }
   }
 
@@ -514,13 +828,13 @@ function gfSetProperty(string $aNode, string|int $aKey, $aValue = null) {
 * @dep EMPTY_STRING
 * @dep SLASH
 * @dep SPACE
-* @dep gfError()
+* @dep gError()
 * @param $aSubsts               multi-dimensional array of keys and values to be replaced
 * @param $aString               string to operate on
 * @param $aRegEx                set to true if pcre
 * @returns                      bitwise int value representing applications
 ***********************************************************************************************************************/
-function gfSubst(string $aString, array $aSubsts, bool $aRegEx = false) {
+function gSubst(string $aString, array $aSubsts, bool $aRegEx = false) {
   $rv = $aString;
   $replaceFunction = $aRegEx ? 'preg_replace' : 'str_replace';
 
@@ -528,34 +842,34 @@ function gfSubst(string $aString, array $aSubsts, bool $aRegEx = false) {
     $rv = call_user_func($replaceFunction, ($aRegEx ? SLASH . $_key . SLASH . 'iU' : $_key), $_value, $rv);
   }
 
-  return !$rv ? gfError('Something has gone wrong...') : $rv;
+  return !$rv ? gError('Something has gone wrong...') : $rv;
 }
 
 /**********************************************************************************************************************
 * Explodes a string to an array without empty elements if it starts or ends with the separator
 *
 * @dep DASH_SEPARATOR
-* @dep gfError()
+* @dep gError()
 * @param $aSeparator   Separator used to split the string
 * @param $aString      String to be exploded
 * @returns             Array of string parts
 ***********************************************************************************************************************/
-function gfSplitStr(string $aSeparator, string $aString) {
+function gSplitStr(string $aSeparator, string $aString) {
   return (!str_contains($aString, $aSeparator)) ? [$aString] :
           array_values(array_filter(explode($aSeparator, $aString), 'strlen'));
 }
-function gfSplitString(...$args) { return gfSplitStr(...$args); }
+function gSplitString(...$args) { return gSplitStr(...$args); }
 
 /**********************************************************************************************************************
 * Splits a path into an indexed array of parts
 *
 * @dep SLASH
-* @dep gfSplitString()
+* @dep gSplitString()
 * @param $aPath   URI Path
 * @returns        array of uri parts in order
 ***********************************************************************************************************************/
-function gfSplitPath(string $aPath) {
-  return ($aPath == SLASH) ? ['root'] : gfSplitString(SLASH, $aPath);
+function gSplitPath(string $aPath) {
+  return ($aPath == SLASH) ? ['root'] : gSplitString(SLASH, $aPath);
 }
 
 /**********************************************************************************************************************
@@ -567,7 +881,7 @@ function gfSplitPath(string $aPath) {
 * @param        ...$aPathParts  Path Parts
 * @returns                      Path string
 ***********************************************************************************************************************/
-function gfBuildPath(...$aPathParts) {
+function gBuildPath(...$aPathParts) {
   $rv = implode(SLASH, $aPathParts);
 
   $filesystem = str_starts_with($rv, ROOT_PATH);
@@ -597,22 +911,22 @@ function gfBuildPath(...$aPathParts) {
 * @param $aPath   Path to be stripped
 * @returns        Stripped path
 ***********************************************************************************************************************/
-function gfStripSubstr(string $aStr, ?string $aStripStr = null) {
+function gStripSubstr(string $aStr, ?string $aStripStr = null) {
   return str_replace($aStripStr ?? ROOT_PATH, EMPTY_STRING, $aStr);
 }
 
 /**********************************************************************************************************************
 * Imports modules
 **********************************************************************************************************************/
-function gfImportModules(string|array ...$aModules) {
+function gImportModules(string|array ...$aModules) {
   if (!defined('MODULES')) {
-    gfError('MODULES is not defined');
+    gError('MODULES is not defined');
   }
 
   foreach ($aModules as $_value) {
     if (is_array($_value)) {
       if (str_starts_with($_value[0], 'static:')) {
-        gfError('Cannot initialize a static class with arguments.');
+        gError('Cannot initialize a static class with arguments.');
       }
 
       $include = str_replace('static:' , EMPTY_STRING, $_value[0]);
@@ -629,20 +943,20 @@ function gfImportModules(string|array ...$aModules) {
     }
    
     if (array_key_exists($moduleName, $GLOBALS)) {
-      gfError('Module ' . $include . ' has already been imported.');
+      gError('Module ' . $include . ' has already been imported.');
     }
 
     if (!array_key_exists($include, MODULES)) {
-      gfError('Unable to import unknown module ' . $include . DOT);
+      gError('Unable to import unknown module ' . $include . DOT);
     }
 
     require(MODULES[$include]);
 
     if ($args) {
-      gfSetProperty('global', $moduleName, new $className(...$args));
+      gSetProperty('global', $moduleName, new $className(...$args));
     }
     else {
-      gfSetProperty('global', $moduleName, ($className === false) ? true : new $className());
+      gSetProperty('global', $moduleName, ($className === false) ? true : new $className());
     }
   }
 }
@@ -651,11 +965,11 @@ function gfImportModules(string|array ...$aModules) {
 * Read file (decode json if the file has that extension or parse install.rdf if that is the target file)
 *
 * @dep FILE_EXTS['json']
-* @dep gfError()
-* @dep gfGetProperty()
+* @dep gError()
+* @dep gGetProperty()
 * @dep $gmAviary - Conditional
 **********************************************************************************************************************/
-function gfReadFile(string $aFile, ?bool $aDecode = true) {
+function gReadFile(string $aFile, ?bool $aDecode = true) {
   $file = @file_get_contents($aFile);
 
   if ($aDecode) {
@@ -670,25 +984,25 @@ function gfReadFile(string $aFile, ?bool $aDecode = true) {
       $file = $gmAviary->parseInstallManifest($file);
 
       if (is_string($file)) {
-        gfError('RDF Parsing Error: ' . $file);
+        gError('RDF Parsing Error: ' . $file);
       }
     }
   }
 
-  return gfGetProperty('var', $file);
+  return gGetProperty('var', $file);
 }
 
 /**********************************************************************************************************************
 * Read file from zip-type archive
 *
-* @dep gfReadFile()
+* @dep gReadFile()
 * @param $aArchive  Archive to read
 * @param $aFile     File in archive
 * @returns          file contents or array if json
                     null if error, empty string, or empty array
 **********************************************************************************************************************/
-function gfReadFilePK(string $aArchive, string $aFile) {
-  return gfReadFile('zip://' . $aArchive . "#" . $aFile);
+function gReadFilePK(string $aArchive, string $aFile) {
+  return gReadFile('zip://' . $aArchive . "#" . $aFile);
 }
 
 /**********************************************************************************************************************
@@ -697,13 +1011,13 @@ function gfReadFilePK(string $aArchive, string $aFile) {
 * @dep FILE_EXTS['json']
 * @dep JSON_FLAGS['display']
 * @dep FILE_WRITE_FLAGS
-* @dep gfGetProperty()
+* @dep gGetProperty()
 * @param $aData     Data to be written
 * @param $aFile     File to write
 * @returns          true else return error string
 **********************************************************************************************************************/
-function gfWriteFile(mixed $aData, string $aFile, ?string $aRenameFile = null, ?bool $aOverwrite = null) {
-  if (!gfGetProperty('var', $aData)) {
+function gWriteFile(mixed $aData, string $aFile, ?string $aRenameFile = null, ?bool $aOverwrite = null) {
+  if (!gGetProperty('var', $aData)) {
     return 'No useful data to write';
   }
 
@@ -734,7 +1048,7 @@ function gfWriteFile(mixed $aData, string $aFile, ?string $aRenameFile = null, ?
 * @param $aLength   Desired number of final chars
 * @returns          Random hexadecimal string of desired length
 **********************************************************************************************************************/
-function gfHexString(int $aLength = 40) {
+function gHexString(int $aLength = 40) {
   return bin2hex(random_bytes(($aLength <= 1) ? 1 : (int)($aLength / 2)));
 }
 
@@ -742,25 +1056,25 @@ function gfHexString(int $aLength = 40) {
 * Request HTTP Basic Authentication
 *
 * @dep SOFTWARE_NAME
-* @dep gfError()
+* @dep gError()
 ***********************************************************************************************************************/
-function gfBasicAuthPrompt() {
+function gBasicAuthPrompt() {
   header('WWW-Authenticate: Basic realm="' . SOFTWARE_NAME . '"');
   header('HTTP/1.0 401 Unauthorized');   
-  gfError('You need to enter a valid username and password.');
+  gError('You need to enter a valid username and password.');
 }
 
 /**********************************************************************************************************************
 * Hash a password
 ***********************************************************************************************************************/
-function gfPasswordHash(string $aPassword, mixed $aCrypt = PASSWORD_BCRYPT, ?string $aSalt = null) {
+function gPasswordHash(string $aPassword, mixed $aCrypt = PASSWORD_BCRYPT, ?string $aSalt = null) {
   switch ($aCrypt) {
     case PASSWORD_CLEARTEXT:
       // We can "hash" a cleartext password by prefixing it with the fake algo prefix $clear$
       if (str_contains($aPassword, DOLLAR)) {
         // Since the dollar sign is used as an identifier and/or separator for hashes we can't use passwords
         // that contain said dollar sign.
-        gfError('Cannot "hash" this Clear Text password because it contains a dollar sign.');
+        gError('Cannot "hash" this Clear Text password because it contains a dollar sign.');
       }
 
       return DOLLAR . PASSWORD_CLEARTEXT . DOLLAR . time() . DOLLAR . $aPassword;
@@ -830,13 +1144,13 @@ function gfPasswordHash(string $aPassword, mixed $aCrypt = PASSWORD_BCRYPT, ?str
 /**********************************************************************************************************************
 * Check a password
 ***********************************************************************************************************************/
-function gfPasswordVerify(string $aPassword, string $aHash) {
+function gPasswordVerify(string $aPassword, string $aHash) {
   // We can accept a pseudo-hash for clear text passwords in the format of $clrtxt$unix-epoch$clear-text-password
   if (str_starts_with($aHash, DOLLAR . PASSWORD_CLEARTEXT)) {
-    $password = gfSplitString(DOLLAR, $aHash) ?? null;
+    $password = gSplitString(DOLLAR, $aHash) ?? null;
 
     if ($password == null || count($password) > 3) {
-      gfError('Unable to "verify" this Clear Text "hashed" password.');
+      gError('Unable to "verify" this Clear Text "hashed" password.');
     }
 
     return $aPassword === $password[2];
@@ -844,13 +1158,13 @@ function gfPasswordVerify(string $aPassword, string $aHash) {
 
   // We can also accept an Apache APR1-MD5 password that is commonly used in .htpasswd
   if (str_starts_with($aHash, DOLLAR . PASSWORD_HTACCESS)) {
-    $salt = gfSplitString(DOLLAR, $aHash)[1] ?? null;
+    $salt = gSplitString(DOLLAR, $aHash)[1] ?? null;
 
     if(!$salt) {
-      gfError('Unable to verify this Apache APR1-MD5 hashed password.');
+      gError('Unable to verify this Apache APR1-MD5 hashed password.');
     }
 
-    return gfPasswordHash($aPassword, PASSWORD_HTACCESS, $salt) === $aHash;
+    return gPasswordHash($aPassword, PASSWORD_HTACCESS, $salt) === $aHash;
   }
 
   // For everything else send to the native password_verify function.
@@ -861,7 +1175,7 @@ function gfPasswordVerify(string $aPassword, string $aHash) {
 /**********************************************************************************************************************
 * Create an XML Document 
 ***********************************************************************************************************************/
-function gfBuildXML(array $aData, ?bool $aDirectOutput = null) {
+function gBuildXML(array $aData, ?bool $aDirectOutput = null) {
   $dom = new DOMDocument('1.0');
   $dom->encoding = "UTF-8";
   $dom->formatOutput = true;
@@ -876,7 +1190,7 @@ function gfBuildXML(array $aData, ?bool $aDirectOutput = null) {
 
     // Properly handle content using XML and not try and be lazy.. It almost never works!
     if (array_key_exists('@content', $aData) && is_string($aData['@content'])) {
-      if (gfContains($aData['@content'], ["<", ">", "?", "&", "'", "\""])) {
+      if (gContains($aData['@content'], ["<", ">", "?", "&", "'", "\""])) {
         $content = $dom->createCDATASection($aData['@content'] ?? EMPTY_STRING);
       }
       else {
@@ -918,11 +1232,11 @@ function gfBuildXML(array $aData, ?bool $aDirectOutput = null) {
   $xml = $dom->saveXML();
 
   if (!$xml) {
-    gfError('Could not generate xml/rdf.');
+    gError('Could not generate xml/rdf.');
   }
 
   if ($aDirectOutput) {
-    gfOutput($xml, 'xml');
+    gOutput($xml, 'xml');
   }
 
   return $xml;
@@ -931,7 +1245,7 @@ function gfBuildXML(array $aData, ?bool $aDirectOutput = null) {
 /**********************************************************************************************************************
 * Show dates in different forms from epoch (or any value that date() accepts.. 
 ***********************************************************************************************************************/
-function gfDate($aTypeOrFormat, $aDateStamp, $aReturnTime = null) {
+function gDate($aTypeOrFormat, $aDateStamp, $aReturnTime = null) {
   if ($aTypeOrFormat == 'buildNumber') {
     return date_diff(date_create(date('Y-m-D', $aDateStamp)), date_create('2000-01-01'))->format('%a');
   }
@@ -970,14 +1284,14 @@ function gfDate($aTypeOrFormat, $aDateStamp, $aReturnTime = null) {
 /**********************************************************************************************************************
 * Simple and almost certainly painless hack to convert an object into an array
 ***********************************************************************************************************************/
-function gfObjectToArray($aObject) {
+function gObjectToArray($aObject) {
   return json_decode(json_encode($aObject), true);
 }
 
 /**********************************************************************************************************************
 * Determines if needle is in haystack and optionally where
 ***********************************************************************************************************************/
-function gfContains(string|array $aHaystack, string|array $aNeedle, int $aMode = 0) {
+function gContains(string|array $aHaystack, string|array $aNeedle, int $aMode = 0) {
   if (is_string($aNeedle)) {
     $aNeedle = [$aNeedle];
   }
@@ -1011,10 +1325,10 @@ function gfContains(string|array $aHaystack, string|array $aNeedle, int $aMode =
 /**********************************************************************************************************************
 * Generates a v4 random guid or a "v4bis" guid with static vendor node
 ***********************************************************************************************************************/
-function gfGUID(?string $aVendor = null, $aXPCOM = null) {
+function gGUID(?string $aVendor = null, $aXPCOM = null) {
   if ($aVendor) {
     if (strlen($aVendor) < 3) {
-      gfError('v4bis GUIDs require a defined vendor of more than three characters long.');
+      gError('v4bis GUIDs require a defined vendor of more than three characters long.');
     }
 
     // Generate 8 pseudo-random bytes
@@ -1080,7 +1394,7 @@ function gfGUID(?string $aVendor = null, $aXPCOM = null) {
 
   // We want the GUID in XPIDL/C++ Header notation
   if ($aXPCOM) {
-    $explode = gfSplitString(DASH, $guid);
+    $explode = gSplitString(DASH, $guid);
     $rv = "%{C++" . NEW_LINE . "//" . SPACE . "{" . $guid . "}" . NEW_LINE .
           "#define NS_CHANGE_ME_CID" . SPACE . 
           vsprintf("{ 0x%s, 0x%s, 0x%s, { 0x%s, 0x%s, 0x%s, 0x%s, 0x%s, 0x%s, 0x%s, 0x%s } }",

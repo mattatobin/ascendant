@@ -62,9 +62,9 @@ const LIBRARIES = array(
 /**********************************************************************************************************************
 * Basic Content Generation using the Special Component's Template
 ***********************************************************************************************************************/
-function gfContent($aContent, array $aMetadata = EMPTY_ARRAY) {
+function gContent($aContent, array $aMetadata = EMPTY_ARRAY) {
   if (SAPI_IS_CLI) {
-    gfOutput(['content' => $aContent, 'title' => $aMetadata['title'] ?? 'Output']);
+    gOutput(['content' => $aContent, 'title' => $aMetadata['title'] ?? 'Output']);
   }
 
   $content = $aContent;
@@ -77,7 +77,7 @@ function gfContent($aContent, array $aMetadata = EMPTY_ARRAY) {
     $rv = EMPTY_STRING;
 
     foreach ($aMenu as $_key => $_value) {
-      if (gfContains($_key, 'onclick=', 1)) {
+      if (gContains($_key, 'onclick=', 1)) {
         $rv .= '<li><a href="#"' . SPACE . $_key . '>' . $_value . '</a></li>';
       }
       else {
@@ -104,70 +104,70 @@ function gfContent($aContent, array $aMetadata = EMPTY_ARRAY) {
     $content = '<form><textarea class="special-textbox" name="content" rows="30" readonly>' . $content . '</textarea></form>';
   }
 
-  $template = gfReadFile(gfBuildPath(PATHS['skin'], DEFAULT_SKIN, 'template' . FILE_EXTS['xhtml'])); 
+  $template = gReadFile(gBuildPath(PATHS['skin'], DEFAULT_SKIN, 'template' . FILE_EXTS['xhtml'])); 
 
   if (!$template) {
-    gfError('Could not read template.');
+    gError('Could not read template.');
   }
  
-  $siteName = gfGetProperty('runtime', 'siteName', SOFTWARE_NAME);
-  $sectionName = gfGetProperty('runtime', 'sectionName');
+  $siteName = gGetProperty('runtime', 'siteName', SOFTWARE_NAME);
+  $sectionName = gGetProperty('runtime', 'sectionName');
 
   if ($sectionName) {
     $siteName = $sectionName . DASH_SEPARATOR . $siteName;
   }
 
-  $commandBar = gfGetProperty('runtime', 'commandBar', ['/' => DEFAULT_HOME_TEXT]);
-  $isTestCase = (!$metadata('title') && gfGetProperty('runtime', 'qTestCase') && gfGetProperty('runtime', 'qComponent') == 'special');
+  $commandBar = gGetProperty('runtime', 'commandBar', ['/' => DEFAULT_HOME_TEXT]);
+  $isTestCase = (!$metadata('title') && gGetProperty('runtime', 'qTestCase') && gGetProperty('runtime', 'qComponent') == 'special');
 
   $substs = array(
-    '{$SKIN_PATH}'        => gfStripSubstr(gfBuildPath(PATHS['skin'], DEFAULT_SKIN)),
+    '{$SKIN_PATH}'        => gStripSubstr(gBuildPath(PATHS['skin'], DEFAULT_SKIN)),
     '{$SITE_NAME}'        => $siteName,
     '{$SITE_MENU}'        => $menuize($commandBar),
     '{$SITE_SECTION}'     => $sectionName ?? EMPTY_STRING,
-    '{$PAGE_TITLE}'       => $isTestCase ? '[Test]' . SPACE . gfGetProperty('runtime', 'qTestCase') : ($metadata('title') ?? 'Output'),
+    '{$PAGE_TITLE}'       => $isTestCase ? '[Test]' . SPACE . gGetProperty('runtime', 'qTestCase') : ($metadata('title') ?? 'Output'),
     '{$PAGE_CONTENT}'     => $content,
-    '{$PAGE_STATUS}'      => $metadata('statustext') ?? gfGetProperty('server', 'REQUEST_URI', SLASH) ?? 'Done',
+    '{$PAGE_STATUS}'      => $metadata('statustext') ?? gGetProperty('server', 'REQUEST_URI', SLASH) ?? 'Done',
     '{$SOFTWARE_VENDOR}'  => SOFTWARE_VENDOR,
     '{$SOFTWARE_NAME}'    => SOFTWARE_NAME,
     '{$SOFTWARE_VERSION}' => SOFTWARE_VERSION,
   );
 
-  $content = gfSubst($template, $substs);
+  $content = gSubst($template, $substs);
 
   ob_end_clean();
-  gfOutput($content, 'html');
+  gOutput($content, 'html');
 }
 
 /**********************************************************************************************************************
 * Check the path count
 ***********************************************************************************************************************/
-function gfCheckDepth($aExpectedCount) {
-  if ((gfGetProperty('runtime', 'currentDepth', 0)) > $aExpectedCount) {
-    gfSend404('Expected count was' . SPACE . $aExpectedCount . SPACE .
-                 'but was' . SPACE . gfGetProperty('runtime', 'currentDepth'));
+function gCheckDepth($aExpectedCount) {
+  if ((gGetProperty('runtime', 'currentDepth', 0)) > $aExpectedCount) {
+    gSend404('Expected count was' . SPACE . $aExpectedCount . SPACE .
+                 'but was' . SPACE . gGetProperty('runtime', 'currentDepth'));
   }
 }
 
 /**********************************************************************************************************************
 * The Special Component
 ***********************************************************************************************************************/
-function gfSpecialComponent() {
+function gSpecialComponent() {
   global $gaRuntime;
 
-  gfSetProperty('runtime', 'qComponent', 'special');
-  gfSetProperty('runtime', 'sectionName', 'Special Component');
+  gSetProperty('runtime', 'qComponent', 'special');
+  gSetProperty('runtime', 'sectionName', 'Special Component');
 
   // The Special Component never has more than one level below it
   // We still have to determine the root of the component though...
-  if (count(gfGetProperty('runtime', 'currentPath')) == 1) {
+  if (count(gGetProperty('runtime', 'currentPath')) == 1) {
     // URL /special/
     $spSpecialFunction = 'root';
   }
   else {
     // URL /special/xxx/
-    gfCheckDepth(2);
-    $spSpecialFunction = gfGetProperty('runtime', 'currentPath')[1];
+    gCheckDepth(2);
+    $spSpecialFunction = gGetProperty('runtime', 'currentPath')[1];
   }
 
   $spCommandBar = array(
@@ -183,31 +183,31 @@ function gfSpecialComponent() {
     unset($spCommandBar['/']);
   }
 
-  gfSetProperty('runtime', 'commandBar', $spCommandBar);
+  gSetProperty('runtime', 'commandBar', $spCommandBar);
 
   switch ($spSpecialFunction) {
     case 'root':
       $spContent = '<h2>Welcome</h2>' .
                    '<p>Please select a special function from the command bar above.';
-      gfContent($spContent, ['title' => 'Overview']);
+      gContent($spContent, ['title' => 'Overview']);
       break;
     case 'test':
-      gfSetProperty('runtime', 'qTestCase', gfGetProperty('get', 'case'));
-      $spTestsPath = gfBuildPath(PATHS['base'], 'tests');
+      gSetProperty('runtime', 'qTestCase', gGetProperty('get', 'case'));
+      $spTestsPath = gBuildPath(PATHS['base'], 'tests');
       $spGlobTests = glob($spTestsPath . WILDCARD . PHP_EXTENSION);
       $spTests = EMPTY_ARRAY;
 
       foreach ($spGlobTests as $_value) {
-        $spTests[] = gfSubst($_value, [PHP_EXTENSION => EMPTY_STRING, $spTestsPath => EMPTY_STRING]);
+        $spTests[] = gSubst($_value, [PHP_EXTENSION => EMPTY_STRING, $spTestsPath => EMPTY_STRING]);
       }
 
-      if (gfGetProperty('runtime', 'qTestCase')) {
-        if (!in_array(gfGetProperty('runtime', 'qTestCase'), $spTests)) {
-          gfError('Unknown test case');
+      if (gGetProperty('runtime', 'qTestCase')) {
+        if (!in_array(gGetProperty('runtime', 'qTestCase'), $spTests)) {
+          gError('Unknown test case');
         }
 
-        require_once($spTestsPath . gfGetProperty('runtime', 'qTestCase') . PHP_EXTENSION);
-        headers_sent() ? exit() : gfError('The operation completed successfully.');
+        require_once($spTestsPath . gGetProperty('runtime', 'qTestCase') . PHP_EXTENSION);
+        headers_sent() ? exit() : gError('The operation completed successfully.');
       }
 
       $spContent = EMPTY_STRING;
@@ -220,23 +220,23 @@ function gfSpecialComponent() {
                    '<p>There are no test cases.</p>' :
                    '<h2>Please select a test case&hellip;</h2><ul>' . $spContent . '</ul>' . str_repeat('<br />', 3);
 
-      gfContent($spContent, ['title' => 'Test Cases']);
+      gContent($spContent, ['title' => 'Test Cases']);
       break;
     case 'runtime':
-      gfContent($gaRuntime, ['title' => 'Runtime Status']);
+      gContent($gaRuntime, ['title' => 'Runtime Status']);
       break;
     case 'hex':
-      gfContent(gfHexString(gfGetProperty('get', 'length', 40)), ['title' => 'Hex String', 'textbox' => true]);
+      gContent(gHexString(gGetProperty('get', 'length', 40)), ['title' => 'Hex String', 'textbox' => true]);
       break;
     case 'guid':
-      gfContent(gfGUID(gfGetProperty('get', 'vendor'), gfGetProperty('get', 'xpcom')), ['title' => 'GUID', 'textbox' => true]);
+      gContent(gGUID(gGetProperty('get', 'vendor'), gGetProperty('get', 'xpcom')), ['title' => 'GUID', 'textbox' => true]);
       break;
     case 'system':
       ini_set('default_mimetype', 'text/html');
       phpinfo(/* INFO_GENERAL | INFO_CONFIGURATION | INFO_ENVIRONMENT | INFO_VARIABLES */);
       break;
     default:
-      gfHeader(404);
+      gHeader(404);
   }
 
   // We're done here
@@ -253,83 +253,83 @@ $gaRuntime = array(
   'currentDomain'       => null,
   'currentSubDomain'    => null,
   'currentSkin'         => DEFAULT_SKIN,
-  'currentScheme'       => gfGetProperty('server', 'SCHEME') ??
-                           (gfGetProperty('server', 'HTTPS') ? 'https' : 'http'),
-  'debugMode'           => (gfGetProperty('server', 'SERVER_NAME') == DEVELOPER_DOMAIN) ?
+  'currentScheme'       => gGetProperty('server', 'SCHEME') ??
+                           (gGetProperty('server', 'HTTPS') ? 'https' : 'http'),
+  'debugMode'           => (gGetProperty('server', 'SERVER_NAME') == DEVELOPER_DOMAIN) ?
                            !DEBUG_MODE :
-                           gfGetProperty('get', 'debugOverride'),
-  'offlineMode'         => file_exists(ROOT_PATH . '/.offline') && !gfGetProperty('get', 'overrideOffline'),
-  'remoteAddr'          => gfGetProperty('server', 'HTTP_X_FORWARDED_FOR', gfGetProperty('server', 'REMOTE_ADDR', '127.0.0.1')),
-  'userAgent'           => gfGetProperty('server', 'HTTP_USER_AGENT', PHP_SAPI . SLASH . PHP_VERSION),
-  'phpRequestURI'       => gfGetProperty('server', 'REQUEST_URI', SLASH),
-  'phpServerName'       => gfGetProperty('server', 'SERVER_NAME', 'localhost'),
-  'qComponent'          => gfGetProperty('get', 'component', 'site'),
-  'qPath'               => gfGetProperty('get', 'path', SLASH),
+                           gGetProperty('get', 'debugOverride'),
+  'offlineMode'         => file_exists(ROOT_PATH . '/.offline') && !gGetProperty('get', 'overrideOffline'),
+  'remoteAddr'          => gGetProperty('server', 'HTTP_X_FORWARDED_FOR', gGetProperty('server', 'REMOTE_ADDR', '127.0.0.1')),
+  'userAgent'           => gGetProperty('server', 'HTTP_USER_AGENT', PHP_SAPI . SLASH . PHP_VERSION),
+  'phpRequestURI'       => gGetProperty('server', 'REQUEST_URI', SLASH),
+  'phpServerName'       => gGetProperty('server', 'SERVER_NAME', 'localhost'),
+  'qComponent'          => gGetProperty('get', 'component', 'site'),
+  'qPath'               => gGetProperty('get', 'path', SLASH),
   'siteName'            => DEFAULT_SITE_NAME,
 );
 
 // Set the current domain and subdomain
-gfSetProperty('runtime', 'currentDomain', binocConsoleUtils::getDomain(gfGetProperty('runtime', 'phpServerName')));
-gfSetProperty('runtime', 'currentSubDomain', binocConsoleUtils::getDomain(gfGetProperty('runtime', 'phpServerName'), true));
+gSetProperty('runtime', 'currentDomain', binocOutputUtils::getDomain(gGetProperty('runtime', 'phpServerName')));
+gSetProperty('runtime', 'currentSubDomain', binocOutputUtils::getDomain(gGetProperty('runtime', 'phpServerName'), true));
 
 // Explode the path if it exists
-gfSetProperty('runtime', 'currentPath', gfSplitPath(gfGetProperty('runtime', 'qPath')));
+gSetProperty('runtime', 'currentPath', gSplitPath(gGetProperty('runtime', 'qPath')));
 
 // Get a count of the exploded path
-gfSetProperty('runtime', 'currentDepth', count(gfGetProperty('runtime', 'currentPath')));
+gSetProperty('runtime', 'currentDepth', count(gGetProperty('runtime', 'currentPath')));
 
 // ------------------------------------------------------------------------------------------------------------------
 
 // Site Offline
-if (!SAPI_IS_CLI && gfGetProperty('runtime', 'offlineMode')) {
+if (!SAPI_IS_CLI && gGetProperty('runtime', 'offlineMode')) {
   $gvOfflineMessage = 'This service is not currently available. Please try again later.';
 
   // Development offline message
   if (str_contains(SOFTWARE_VERSION, 'a') || str_contains(SOFTWARE_VERSION, 'b') ||
-      str_contains(SOFTWARE_VERSION, 'pre') || gfGetProperty('runtime', 'offlineMode')) {
+      str_contains(SOFTWARE_VERSION, 'pre') || gGetProperty('runtime', 'offlineMode')) {
     $gvOfflineMessage = 'This in-development version of'. SPACE . SOFTWARE_NAME . SPACE . 'is not for public consumption.';
   }
 
-  gfError($gvOfflineMessage);
+  gError($gvOfflineMessage);
 }
 
 // ------------------------------------------------------------------------------------------------------------------
 
 // XXXTobin: Handle legacy phoebus component requests by sending them to a translation component
 // This should be eventually removed as older versions age reasonably out
-if (in_array(gfGetProperty('runtime', 'qComponent'), ['aus', 'discover', 'download', 'integration'])) {
-  gfSetProperty('runtime', 'phoebusComponent', gfGetProperty('runtime', 'qComponent'));
-  gfSetProperty('runtime', 'qComponent', 'phoebus');
+if (in_array(gGetProperty('runtime', 'qComponent'), ['aus', 'discover', 'download', 'integration'])) {
+  gSetProperty('runtime', 'phoebusComponent', gGetProperty('runtime', 'qComponent'));
+  gSetProperty('runtime', 'qComponent', 'phoebus');
 }
 
 // ------------------------------------------------------------------------------------------------------------------
 
 // Handle pretty urls that override the site component
-if (in_array(gfGetProperty('runtime', 'currentPath')[0], COMPONENT_SLUGS)) {
-  gfSetProperty('runtime', 'qComponent', gfGetProperty('runtime', 'currentPath')[0]);
+if (in_array(gGetProperty('runtime', 'currentPath')[0], COMPONENT_SLUGS)) {
+  gSetProperty('runtime', 'qComponent', gGetProperty('runtime', 'currentPath')[0]);
 }
 
 // In the event that the site component isn't defined then redirect to the special "component"
-if (gfGetProperty('runtime', 'qComponent') == 'site' && !array_key_exists('site', COMPONENTS)) {
-  gfRedirect(SLASH . 'special' . gfGetProperty('runtime', 'phpRequestURI'));
+if (gGetProperty('runtime', 'qComponent') == 'site' && !array_key_exists('site', COMPONENTS)) {
+  gRedirect(SLASH . 'special' . gGetProperty('runtime', 'phpRequestURI'));
 }
 
 // Load component based on qComponent
-if (array_key_exists(gfGetProperty('runtime', 'qComponent'), COMPONENTS)) {
-  $gvComponentFile = COMPONENTS[gfGetProperty('runtime', 'qComponent')];
+if (array_key_exists(gGetProperty('runtime', 'qComponent'), COMPONENTS)) {
+  $gvComponentFile = COMPONENTS[gGetProperty('runtime', 'qComponent')];
   $gvComponentFile = file_exists($gvComponentFile) ?
                      require_once($gvComponentFile) :
-                     gfSend404('Cannot load the' . SPACE . gfGetProperty('runtime', 'qComponent') . SPACE . 'component.');
+                     gSend404('Cannot load the' . SPACE . gGetProperty('runtime', 'qComponent') . SPACE . 'component.');
   
-  headers_sent() ? exit() : gfError('The operation completed successfully.');
+  headers_sent() ? exit() : gError('The operation completed successfully.');
 }
 
-if (gfGetProperty('runtime', 'qComponent') == 'special') {
-  gfSpecialComponent();
+if (gGetProperty('runtime', 'qComponent') == 'special') {
+  gSpecialComponent();
   
 }
 
-gfSend404('PC LOAD LETTER');
+gSend404('PC LOAD LETTER');
 
 // ====================================================================================================================
 
