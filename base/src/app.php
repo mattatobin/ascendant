@@ -2,8 +2,18 @@
 // == | Setup | =======================================================================================================
 
 // Define basic constants for the software
-const kAppRepo = '#';
 const kDebugDomain = 'preview.binaryoutcast.com';
+const kAppRepo = '#';
+const kAppComps = ['panel', 'phoebus', 'update', 'storage'];
+const kPrettyComps = ['special', 'panel'];
+const kAppModules = ['database'];
+const kAppLibs = array(
+  'rdf'             => 'rdf_parser.php',
+  'safeMySQL'       => 'safemysql.class.php',
+  'smarty'          => 'smarty/Smarty.class.php',
+);
+
+// --------------------------------------------------------------------------------------------------------------------
 
 const SOFTWARE_REPO       = kAppRepo;
 const DEVELOPER_DOMAIN    = kDebugDomain;
@@ -11,13 +21,10 @@ const DEVELOPER_DOMAIN    = kDebugDomain;
 const DEFAULT_SKIN        = 'default';
 const DEFAULT_SITE_NAME   = 'Binary Outcast';
 
-// --------------------------------------------------------------------------------------------------------------------
-
 // Define paths
 const PATHS = array(
   'base'            => ROOT_PATH . SLASH . 'base'         . SLASH,
   'components'      => ROOT_PATH . SLASH . 'components'   . SLASH,
-  'databases'       => ROOT_PATH . SLASH . 'db'           . SLASH,
   'datastore'       => ROOT_PATH . SLASH . 'datastore'    . SLASH,
   'modules'         => ROOT_PATH . SLASH . 'modules'      . SLASH,
   'libraries'       => ROOT_PATH . SLASH . 'third_party'  . SLASH,
@@ -25,35 +32,11 @@ const PATHS = array(
   'skin'            => ROOT_PATH . SLASH . 'skin'         . SLASH,
 );
 
-// Define components
-const COMPONENTS = array(
-  'file'            => PATHS['components'] . 'file.php',
-  'panel'           => PATHS['components'] . 'panel' . SLASH . 'panel.php',
-  'phoebus'         => PATHS['components'] . 'phoebus.php',
-//'site'            => PATHS['components'] . 'site' . SLASH . 'site.php',
-  'update'          => PATHS['components'] . 'update.php',
-);
+// --------------------------------------------------------------------------------------------------------------------
 
-// These components have pretty path slugs
-const COMPONENT_SLUGS = ['special', 'panel'];
-
-// Define databases
-const DATABASES = array(
-  'emailBlacklist'  => PATHS['databases'] . 'emailBlacklist.php',
-);
-
-// Define modules
-const MODULES = array(
-  'database'        => PATHS['modules'] . 'database.php',
-  'vc'              => PATHS['modules'] . 'nsIVersionComparator.php',
-);
-
-// Define libraries
-const LIBRARIES = array(
-  'rdfParser'       => PATHS['libraries'] . 'rdf_parser.php',
-  'safeMySQL'       => PATHS['libraries'] . 'safemysql.class.php',
-  'smarty'          => PATHS['libraries'] . 'smarty' . SLASH . 'Smarty.class.php',
-);
+gRegisterFiles('COMPONENTS', kAppComps);
+gRegisterFiles('MODULES', kAppModules);
+gRegisterFiles('LIBRARIES', kAppLibs);
 
 // ====================================================================================================================
 
@@ -223,7 +206,7 @@ function gSpecialComponent() {
       gContent($spContent, ['title' => 'Test Cases']);
       break;
     case 'runtime':
-      gContent(['gaRuntime' => $gaRuntime, 'registry' => binocRegUtils::getStore()],
+      gContent(['gaRuntime' => $gaRuntime, 'registry' => binoc\utils\registry::getStore()],
                ['title' => 'Runtime Status']);
       break;
     case 'hex':
@@ -312,7 +295,7 @@ if (in_array(gGetProperty('runtime', 'qComponent'), ['aus', 'discover', 'downloa
 // ------------------------------------------------------------------------------------------------------------------
 
 // Handle pretty urls that override the site component
-if (in_array(gGetProperty('runtime', 'currentPath')[0], COMPONENT_SLUGS)) {
+if (in_array(gGetProperty('runtime', 'currentPath')[0], kPrettyComps)) {
   gSetProperty('runtime', 'qComponent', gGetProperty('runtime', 'currentPath')[0]);
 }
 

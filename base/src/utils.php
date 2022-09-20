@@ -7,8 +7,6 @@
 
 /* Portions of this file are under the following licenses:
 
-  ---------------------------------------------------------------------------------------------------------------------
-
   The MIT License (MIT)
 
   Copyright (c) Taylor Otwell
@@ -345,7 +343,8 @@ namespace binoc\utils {
 
         $commandBar = ['onclick="history.back()"' => 'Go Back'];
 
-        if (gGetProperty('runtime', 'qComponent') == 'special' || !array_key_exists('site', COMPONENTS ?? [])) {
+        $siteComponent = defined('COMPONENTS') ? array_key_exists('site', COMPONENTS) : false;
+        if (gGetProperty('runtime', 'qComponent') == 'special' || !$siteComponent) {
           $commandBar['/special/'] = 'Special Component';
         }
         else {
@@ -710,7 +709,7 @@ namespace {
   * @param $aMessage   Error message
   **********************************************************************************************************************/
   function gError($aMessage) {
-    binocOutputUtils::reportFailure(['code' => E_ALL, 'message' => $aMessage, 'file' => null, 'line' => null,
+    binoc\utils\output::reportFailure(['code' => E_ALL, 'message' => $aMessage, 'file' => null, 'line' => null,
                                      'trace' => debug_backtrace(2)]);
   }
 
@@ -721,11 +720,44 @@ namespace {
   ***********************************************************************************************************************/
   function gSend404($aMessage) {
     if (gGetProperty('runtime', 'debugMode', DEBUG_MODE)) {
-      binocOutputUtils::reportFailure(['code' => E_ALL, 'message' => $aMessage, 'file' => null, 'line' => null,
+      binoc\utils\output::reportFailure(['code' => E_ALL, 'message' => $aMessage, 'file' => null, 'line' => null,
                                        'trace' => debug_backtrace(2)]);
     }
 
-    binocOutputUtils::header(404);
+    binoc\utils\output::header(404);
+  }
+
+  /**********************************************************************************************************************
+  * Registers Files to be included such as components and modules
+  ***********************************************************************************************************************/
+  function gRegisterFiles($aConst, $aIncludes) {
+    if (defined($aConst)) {
+      return;
+    }
+
+    $includes = EMPTY_ARRAY;
+
+    foreach($aIncludes as $_key => $_value) { 
+      switch ($aConst) {
+        case 'COMPONENTS':
+          $includes[$_value] = gBuildPath(ROOT_PATH, 'components', $_value, 'src', $_value . FILE_EXTS['php']);
+          break;
+        case 'MODULES':
+          $includes[$_value] = gBuildPath(ROOT_PATH, 'modules', $_value . FILE_EXTS['php']);
+          break;
+        case 'LIBRARIES':
+          if (str_contains($_value, DOT . DOT)) {
+            return;
+          }
+
+          $includes[$_key] = gBuildPath(ROOT_PATH, 'third_party', $_value);
+          break;
+        default:
+          gfError('Unknown include type');
+      }
+    }
+
+    define($aConst, $includes);
   }
 
   /**********************************************************************************************************************
