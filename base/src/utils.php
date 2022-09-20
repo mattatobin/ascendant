@@ -710,7 +710,7 @@ namespace {
   **********************************************************************************************************************/
   function gError($aMessage) {
     binoc\utils\output::reportFailure(['code' => E_ALL, 'message' => $aMessage, 'file' => null, 'line' => null,
-                                     'trace' => debug_backtrace(2)]);
+                                       'trace' => debug_backtrace(2)]);
   }
 
   /**********************************************************************************************************************
@@ -721,7 +721,7 @@ namespace {
   function gSend404($aMessage) {
     if (gGetProperty('runtime', 'debugMode', DEBUG_MODE)) {
       binoc\utils\output::reportFailure(['code' => E_ALL, 'message' => $aMessage, 'file' => null, 'line' => null,
-                                       'trace' => debug_backtrace(2)]);
+                                         'trace' => debug_backtrace(2)]);
     }
 
     binoc\utils\output::header(404);

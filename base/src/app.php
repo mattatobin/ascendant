@@ -46,7 +46,9 @@ gRegisterFiles('LIBRARIES', kAppLibs);
 * Basic Content Generation using the Special Component's Template
 ***********************************************************************************************************************/
 function gContent($aContent, array $aMetadata = EMPTY_ARRAY) {
-  if (SAPI_IS_CLI) {
+  $template = SAPI_IS_CLI ? false : gReadFile(gBuildPath(ROOT_PATH, 'base', 'skin', 'site.tpl')); 
+
+  if (!$template) {
     gOutput(['content' => $aContent, 'title' => $aMetadata['title'] ?? 'Output']);
   }
 
@@ -87,12 +89,6 @@ function gContent($aContent, array $aMetadata = EMPTY_ARRAY) {
     $content = '<form><textarea class="special-textbox" name="content" rows="30" readonly>' . $content . '</textarea></form>';
   }
 
-  $template = gReadFile(gBuildPath(PATHS['base'], 'skin', 'template' . FILE_EXTS['xhtml'])); 
-
-  if (!$template) {
-    gError('Could not read template.');
-  }
- 
   $siteName = gGetProperty('runtime', 'siteName', SOFTWARE_NAME);
   $sectionName = gGetProperty('runtime', 'sectionName');
 
