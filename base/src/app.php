@@ -2,8 +2,12 @@
 // == | Setup | =======================================================================================================
 
 // Define basic constants for the software
-const SOFTWARE_REPO       = 'about:blank';
-const DEVELOPER_DOMAIN    = 'preview.binaryoutcast.com';
+const kAppRepo = '#';
+const kDebugDomain = 'preview.binaryoutcast.com';
+
+const SOFTWARE_REPO       = kAppRepo;
+const DEVELOPER_DOMAIN    = kDebugDomain;
+
 const DEFAULT_SKIN        = 'default';
 const DEFAULT_SITE_NAME   = 'Binary Outcast';
 
@@ -11,14 +15,14 @@ const DEFAULT_SITE_NAME   = 'Binary Outcast';
 
 // Define paths
 const PATHS = array(
-  'base'            => ROOT_PATH . SLASH . 'base'       . SLASH,
-  'components'      => ROOT_PATH . SLASH . 'components' . SLASH,
-  'databases'       => ROOT_PATH . SLASH . 'db'         . SLASH,
-  'datastore'       => ROOT_PATH . SLASH . 'datastore'  . SLASH,
-  'modules'         => ROOT_PATH . SLASH . 'modules'    . SLASH,
-  'libraries'       => ROOT_PATH . SLASH . 'libs'       . SLASH,
-  'obj'             => ROOT_PATH . SLASH . '.obj'       . SLASH,
-  'skin'            => ROOT_PATH . SLASH . 'skin'       . SLASH,
+  'base'            => ROOT_PATH . SLASH . 'base'         . SLASH,
+  'components'      => ROOT_PATH . SLASH . 'components'   . SLASH,
+  'databases'       => ROOT_PATH . SLASH . 'db'           . SLASH,
+  'datastore'       => ROOT_PATH . SLASH . 'datastore'    . SLASH,
+  'modules'         => ROOT_PATH . SLASH . 'modules'      . SLASH,
+  'libraries'       => ROOT_PATH . SLASH . 'third_party'  . SLASH,
+  'objdir'          => ROOT_PATH . SLASH . '.obj'         . SLASH,
+  'skin'            => ROOT_PATH . SLASH . 'skin'         . SLASH,
 );
 
 // Define components
@@ -50,10 +54,6 @@ const LIBRARIES = array(
   'safeMySQL'       => PATHS['libraries'] . 'safemysql.class.php',
   'smarty'          => PATHS['libraries'] . 'smarty' . SLASH . 'Smarty.class.php',
 );
-
-// --------------------------------------------------------------------------------------------------------------------
-
-
 
 // ====================================================================================================================
 
@@ -104,7 +104,7 @@ function gContent($aContent, array $aMetadata = EMPTY_ARRAY) {
     $content = '<form><textarea class="special-textbox" name="content" rows="30" readonly>' . $content . '</textarea></form>';
   }
 
-  $template = gReadFile(gBuildPath(PATHS['skin'], DEFAULT_SKIN, 'template' . FILE_EXTS['xhtml'])); 
+  $template = gReadFile(gBuildPath(PATHS['base'], 'skin', 'template' . FILE_EXTS['xhtml'])); 
 
   if (!$template) {
     gError('Could not read template.');
@@ -121,10 +121,10 @@ function gContent($aContent, array $aMetadata = EMPTY_ARRAY) {
   $isTestCase = (!$metadata('title') && gGetProperty('runtime', 'qTestCase') && gGetProperty('runtime', 'qComponent') == 'special');
 
   $substs = array(
-    '{$SKIN_PATH}'        => gStripSubstr(gBuildPath(PATHS['skin'], DEFAULT_SKIN)),
+    '{$SKIN_PATH}'        => gStripSubstr(gBuildPath(PATHS['base'], 'skin')),
     '{$SITE_NAME}'        => $siteName,
     '{$SITE_MENU}'        => $menuize($commandBar),
-    '{$SITE_SECTION}'     => $sectionName ?? EMPTY_STRING,
+    '{$SITE_SECTION}'     => $wellsectionName ?? EMPTY_STRING,
     '{$PAGE_TITLE}'       => $isTestCase ? '[Test]' . SPACE . gGetProperty('runtime', 'qTestCase') : ($metadata('title') ?? 'Output'),
     '{$PAGE_CONTENT}'     => $content,
     '{$PAGE_STATUS}'      => $metadata('statustext') ?? gGetProperty('server', 'REQUEST_URI', SLASH) ?? 'Done',
@@ -223,7 +223,8 @@ function gSpecialComponent() {
       gContent($spContent, ['title' => 'Test Cases']);
       break;
     case 'runtime':
-      gContent($gaRuntime, ['title' => 'Runtime Status']);
+      gContent(['gaRuntime' => $gaRuntime, 'registry' => binocRegUtils::getStore()],
+               ['title' => 'Runtime Status']);
       break;
     case 'hex':
       gContent(gHexString(gGetProperty('get', 'length', 40)), ['title' => 'Hex String', 'textbox' => true]);
@@ -233,7 +234,7 @@ function gSpecialComponent() {
       break;
     case 'system':
       ini_set('default_mimetype', 'text/html');
-      phpinfo(/* INFO_GENERAL | INFO_CONFIGURATION | INFO_ENVIRONMENT | INFO_VARIABLES */);
+      phpinfo(INFO_GENERAL | INFO_CONFIGURATION | INFO_ENVIRONMENT | INFO_VARIABLES);
       break;
     default:
       gHeader(404);
@@ -269,14 +270,20 @@ $gaRuntime = array(
 );
 
 // Set the current domain and subdomain
-gSetProperty('runtime', 'currentDomain', binocOutputUtils::getDomain(gGetProperty('runtime', 'phpServerName')));
-gSetProperty('runtime', 'currentSubDomain', binocOutputUtils::getDomain(gGetProperty('runtime', 'phpServerName'), true));
+gSetProperty('runtime', 'currentDomain', binoc\utils\output::getDomain(gGetProperty('runtime', 'phpServerName')));
+gSetProperty('runtime', 'currentSubDomain', binoc\utils\output::getDomain(gGetProperty('runtime', 'phpServerName'), true));
 
 // Explode the path if it exists
 gSetProperty('runtime', 'currentPath', gSplitPath(gGetProperty('runtime', 'qPath')));
 
 // Get a count of the exploded path
 gSetProperty('runtime', 'currentDepth', count(gGetProperty('runtime', 'currentPath')));
+
+gSetRegKey('app.offline', (file_exists(ROOT_PATH . '/.offline') && !gSuperGlobal('get', 'overrideOffline')));
+gSetRegKey('app.debug', (gSuperGlobal('server', 'SERVER_NAME') == DEVELOPER_DOMAIN) ? !DEBUG_MODE : !gSuperGlobal('get', 'overrideOffline'));
+gSetRegKey('output.siteName', 'Binary Outcast');
+gSetRegKey('output.commandBar', [SLASH => 'Site Root (Home)']);
+gSetRegKey('output.contentType', 'text/html');
 
 // ------------------------------------------------------------------------------------------------------------------
 
@@ -326,7 +333,6 @@ if (array_key_exists(gGetProperty('runtime', 'qComponent'), COMPONENTS)) {
 
 if (gGetProperty('runtime', 'qComponent') == 'special') {
   gSpecialComponent();
-  
 }
 
 gSend404('PC LOAD LETTER');
