@@ -15,28 +15,9 @@ const kAppLibs = array(
 
 // --------------------------------------------------------------------------------------------------------------------
 
-const SOFTWARE_REPO       = kAppRepo;
-const DEVELOPER_DOMAIN    = kDebugDomain;
-
-const DEFAULT_SKIN        = 'default';
-const DEFAULT_SITE_NAME   = 'Binary Outcast';
-
-// Define paths
-const PATHS = array(
-  'base'            => ROOT_PATH . SLASH . 'base'         . SLASH,
-  'components'      => ROOT_PATH . SLASH . 'components'   . SLASH,
-  'datastore'       => ROOT_PATH . SLASH . 'datastore'    . SLASH,
-  'modules'         => ROOT_PATH . SLASH . 'modules'      . SLASH,
-  'libraries'       => ROOT_PATH . SLASH . 'third_party'  . SLASH,
-  'objdir'          => ROOT_PATH . SLASH . '.obj'         . SLASH,
-  'skin'            => ROOT_PATH . SLASH . 'skin'         . SLASH,
-);
-
-// --------------------------------------------------------------------------------------------------------------------
-
-gRegisterFiles('COMPONENTS', kAppComps);
-gRegisterFiles('MODULES', kAppModules);
-gRegisterFiles('LIBRARIES', kAppLibs);
+gRegisterIncludes('COMPONENTS', kAppComps);
+gRegisterIncludes('MODULES', kAppModules);
+gRegisterIncludes('LIBRARIES', kAppLibs);
 
 // ====================================================================================================================
 
@@ -100,7 +81,7 @@ function gContent($aContent, array $aMetadata = EMPTY_ARRAY) {
   $isTestCase = (!$metadata('title') && gGetProperty('runtime', 'qTestCase') && gGetProperty('runtime', 'qComponent') == 'special');
 
   $substs = array(
-    '{$SKIN_PATH}'        => gStripSubstr(gBuildPath(PATHS['base'], 'skin')),
+    '{$SKIN_PATH}'        => gBuildPath('base', 'skin'),
     '{$SITE_NAME}'        => $siteName,
     '{$SITE_MENU}'        => $menuize($commandBar),
     '{$SITE_SECTION}'     => $wellsectionName ?? EMPTY_STRING,
@@ -153,8 +134,9 @@ function gSpecialComponent() {
     '/'                         => DEFAULT_HOME_TEXT,
     '/special/'                 => 'Special Component',
     '/special/test/'            => 'Test Cases',
-    '/special/hex/'             => 'Hex String',
+    '/special/vc/'              => 'Version Compare',
     '/special/guid/'            => 'GUID',
+    '/special/hex/'             => 'Hex String',
     '/special/runtime/'         => 'Runtime Status',
   );
 
@@ -172,7 +154,7 @@ function gSpecialComponent() {
       break;
     case 'test':
       gSetProperty('runtime', 'qTestCase', gGetProperty('get', 'case'));
-      $spTestsPath = gBuildPath(PATHS['base'], 'tests');
+      $spTestsPath = gBuildPath(ROOT_PATH, 'base', 'tests');
       $spGlobTests = glob($spTestsPath . WILDCARD . PHP_EXTENSION);
       $spTests = EMPTY_ARRAY;
 
@@ -201,15 +183,30 @@ function gSpecialComponent() {
 
       gContent($spContent, ['title' => 'Test Cases']);
       break;
-    case 'runtime':
-      gContent(['gaRuntime' => $gaRuntime, 'registry' => binoc\utils\registry::getStore()],
-               ['title' => 'Runtime Status']);
+    case 'vc':
+      $spCurrVer = gGetRegKey('request.post.currVer');
+      $spCompVer = gGetRegKey('request.post.compVer');
+
+      if ($spCurrVer && $spCompVer) {
+        $spVC = gVersionCompare($spCurrVer, $spCompVer);
+        gContent($spVC);
+      }
+
+      $spForm = '<form action="/special/vc/" method="post">Current Version:<br/><input type="text" name="currVer"><br/><br/>' .
+                'Compare to Version:<br/><input type="text" name="compVer"><br/><br/><input type="submit"></form>';
+
+      gContent('<h2>nsIVersionComparator</h2>' . $spForm, ['title' => 'Runtime Status']);
+      break;
+    case 'guid':
+      gContent(gGUID(gGetProperty('get', 'vendor'), true), ['title' => 'GUID', 'textbox' => true]);
       break;
     case 'hex':
       gContent(gHexString(gGetProperty('get', 'length', 40)), ['title' => 'Hex String', 'textbox' => true]);
       break;
-    case 'guid':
-      gContent(gGUID(gGetProperty('get', 'vendor'), gGetProperty('get', 'xpcom')), ['title' => 'GUID', 'textbox' => true]);
+    case 'runtime':
+      $spContent = binoc\utils\registry::getStore();
+      ksort($spContent);
+      gContent($spContent, ['title' => 'Runtime Status']);
       break;
     case 'system':
       ini_set('default_mimetype', 'text/html');
@@ -227,15 +224,23 @@ function gSpecialComponent() {
 
 // == | Main | ========================================================================================================
 
-// Define an array that will hold the current application state
+gSetRegKey('app.offline', (file_exists(ROOT_PATH . '/.offline') && !gSuperGlobal('get', 'overrideOffline')));
+gSetRegKey('debug.enabled', (gSuperGlobal('server', 'SERVER_NAME') == kDebugDomain) ? !DEBUG_MODE : !gSuperGlobal('get', 'overrideOffline'));
+gSetRegKey('output.siteName', 'Binary Outcast');
+gSetRegKey('output.commandBar', [SLASH => 'Site Root (Home)']);
+gSetRegKey('output.contentType', 'text/html');
+
+// ------------------------------------------------------------------------------------------------------------------
+
+// deprecate an array that will hold the current application state
 $gaRuntime = array(
   'currentPath'         => null,
   'currentDomain'       => null,
   'currentSubDomain'    => null,
-  'currentSkin'         => DEFAULT_SKIN,
+  'currentSkin'         => 'default',
   'currentScheme'       => gGetProperty('server', 'SCHEME') ??
                            (gGetProperty('server', 'HTTPS') ? 'https' : 'http'),
-  'debugMode'           => (gGetProperty('server', 'SERVER_NAME') == DEVELOPER_DOMAIN) ?
+  'debugMode'           => (gGetProperty('server', 'SERVER_NAME') == kDebugDomain) ?
                            !DEBUG_MODE :
                            gGetProperty('get', 'debugOverride'),
   'offlineMode'         => file_exists(ROOT_PATH . '/.offline') && !gGetProperty('get', 'overrideOffline'),
@@ -245,7 +250,7 @@ $gaRuntime = array(
   'phpServerName'       => gGetProperty('server', 'SERVER_NAME', 'localhost'),
   'qComponent'          => gGetProperty('get', 'component', 'site'),
   'qPath'               => gGetProperty('get', 'path', SLASH),
-  'siteName'            => DEFAULT_SITE_NAME,
+  'siteName'            => 'Binary Outcast',
 );
 
 // Set the current domain and subdomain
@@ -257,12 +262,6 @@ gSetProperty('runtime', 'currentPath', gSplitPath(gGetProperty('runtime', 'qPath
 
 // Get a count of the exploded path
 gSetProperty('runtime', 'currentDepth', count(gGetProperty('runtime', 'currentPath')));
-
-gSetRegKey('app.offline', (file_exists(ROOT_PATH . '/.offline') && !gSuperGlobal('get', 'overrideOffline')));
-gSetRegKey('app.debug', (gSuperGlobal('server', 'SERVER_NAME') == DEVELOPER_DOMAIN) ? !DEBUG_MODE : !gSuperGlobal('get', 'overrideOffline'));
-gSetRegKey('output.siteName', 'Binary Outcast');
-gSetRegKey('output.commandBar', [SLASH => 'Site Root (Home)']);
-gSetRegKey('output.contentType', 'text/html');
 
 // ------------------------------------------------------------------------------------------------------------------
 
